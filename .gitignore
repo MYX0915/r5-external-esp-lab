@@ -1,16 +1,4 @@
-# 构建产物
-bin/*.sys
-bin/*.exe
-bin/*.pdb
-obj/
-*.obj
-*.pdb
-*.ilk
-*.exp
-*.lib
-
 # 运行时数据 / 转储
-*.bin
 *.dmp
 logs/
 scdump/
@@ -18,16 +6,13 @@ kmaplog.txt
 sc_feed.bin
 sc_req.txt
 sc_ack.txt
+obj/
 
-# 第三方工具与嵌套仓库（体积大 / 各自独立版本管理）
-kdmapper/
-tools/
+# 嵌套仓库（各自独立版本管理）
 repo/
 r5repo/
-dse-kit/
 
 # 证书与签名私钥
-*.cer
 *.pfx
 *.pvk
 
