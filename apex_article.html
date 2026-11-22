@@ -1,0 +1,779 @@
+<p class="wp-block-paragraph">Many of you have probably already heard that Respawn has recently been doing some interesting things in terms of securing their games. It was big news for everybody when they announced that Apex would be switching from EAC to EA’s Javelin for their primary anti-cheat solution. I was initially pretty depressed, because I admittedly feared for the worst in terms of the changes it would induce. Luck was on my side though, and It happened to be quite easy to pick up the work where i had left it off.</p>
+
+
+
+<div aria-hidden="true" class="wp-block-spacer"></div>
+
+
+
+<p class="wp-block-paragraph">That being said, I do suspect they are doing much more than just this, behind the scenes. At least when it comes to their operation of denying cheaters their entry, and constantly raising the bar for both cheat users and developers. Their campaign seems to rely on a multi-dimensional approach, targeting multiple different cheating setups, without necessarily detecting them by classic means. Although their client-sided detections still play an important role today, and they in fact still deploy their in-house R5AC solution for heuristic cheat detections within the game process itself. I’ll elaborate on this further in the next paragraphs.</p>
+
+
+
+<div aria-hidden="true" class="wp-block-spacer"></div>
+
+
+
+<p class="wp-block-paragraph"></p>
+
+
+
+<h2 class="wp-block-heading">Part 1 :  Replacement of Easy Anti-Cheat with EA Javelin</h2>
+
+
+
+<p class="wp-block-paragraph">So, as mentioned above, Apex is now using EA Javelin as its primary anti-cheat solution. It currently <strong>doesn’t</strong> require any of those fancy platform-based security features such as secure boot, TPM 2.0 or HVCI/VBS. Their enforcement of a minimum OS version doesn’t seem to have changed either. Meaning: if you’re using a somewhat recent build of Windows 10, chances are you might be able to play just fine. </p>
+
+
+
+<p class="wp-block-paragraph">Of course, this could change anytime, and it’s public knowledge that Javelin can enforce these requirements, just as EAC can if the game studio opts in for it. Nobody except respawn will be able to answer why they held back for so long with enforcing these platform security features on a larger scale. It would definitely make cheating more painful, especially for those people who just like to poke around things and have generally brittle setups.</p>
+
+
+
+<p class="wp-block-paragraph">In terms of actual detection capability, it is still too early for me to give accurate advice here. I have just started playing Apex again and delving deeper into this massive amount of changes, which is why i will resort to talking about things I definitely know. I haven’t had any trouble with Javelin’s address space protections so far. It does behave differently compared to EAC, but you can overcome it quite easily if you managed to handle the implementation they used before the switch to Javelin.</p>
+
+
+
+<p class="wp-block-paragraph">Do keep in mind though that this is only the tip of the iceberg, really. Just because you get in, doesn’t mean you will be able to persist without someone or something noticing. We’ll talk more about this in the following chapters. Until then, i will be sparing my breath about the new anti-cheat itself.</p>
+
+
+
+<div aria-hidden="true" class="wp-block-spacer"></div>
+
+
+
+<p class="wp-block-paragraph"><strong>Update 2026/11/04:</strong> As someone who has previously dealt with EAC, i had my share of troubles when encountering some of EA’s tricks. In order to illustrate how funny it can get, let me introduce you to one of their memes. For this one, they will periodically overwrite the prologue of ntoskrnl’s MmCopyMemory function, while maintaining the hook for a relatively short period of time, before they then retire it by restoring the original bytes in the function prologue. When i checked who is writing to it, it was a generic memmove-like function inside eaanticheat.sys. For both the patch and restore operation. I’m not claiming i know exactly what they use it for, but it’s still interesting to note down.</p>
+
+
+
+<p class="wp-block-paragraph">What do they overwrite it with, you might ask? Let’s see for ourselves:</p>
+
+
+<div class="wp-block-syntaxhighlighter-code "><pre class="brush: plain; title: ; notranslate">
+ntoskrnl.exe!MmCopyMemory:
+
+Original: 48 89 5C 24 20 55 56 57 41 54 41 55
+ASM:
+mov [rsp+20h], rbx
+push rbp
+push rsi
+push rdi
+push r12
+push r13
+
+Patched: 48 B8 60 5A 44 B8 00 F8 FF FF FF E0
+ASM:
+mov rax, 0xFFFFF800B8445A60            ; this hook handler is within eaanticheat.sys
+jmp rax
+
+</pre></div>
+
+
+<p class="wp-block-paragraph">This is a classic way to redirect the program counter. It moves the destination into RAX register and then jumps to the contents of RAX. Which in this case, seems to be their hook handler for this specific target. Below is some pseudo code, beautified with GPT:</p>
+
+
+<div class="wp-block-syntaxhighlighter-code "><pre class="brush: cpp; title: ; notranslate">
+// RVA: eaanticheat.sys+0x1717CFE
+
+NTSTATUS MmCopyMemory_HookHandler(
+    PVOID TargetAddress,
+    MM_COPY_ADDRESS SourceAddress,
+    SIZE_T NumberOfBytes,
+    ULONG Flags,
+    PSIZE_T NumberOfBytesTransferred
+)
+{
+    // RVA 0x1717D12
+    InterlockedIncrement(&amp;g_ActiveCalls);
+
+    // RVA 0x1717D19
+    if (Flags == MM_COPY_MEMORY_PHYSICAL)
+    {
+        // RVA 0x1717D6F
+
+        RDI = TargetAddress;
+        RBX = SourceAddress;
+        R14 = NumberOfBytes;
+        EBP = Flags;
+
+        // RVA 0x1717D7B
+        R15 = OriginalCallerReturnAddress;
+
+        // RVA 0x1717E12
+        RAX = sub_192179A();
+
+        // RVA 0x1717E17
+        JMP_TO(RAX);
+    }
+
+    // RVA 0x1717F3E
+    else
+    {
+        void* slotA = RVA_TO_VA(0x69C868);
+        void* slotB = RVA_TO_VA(0x69C878);
+
+        BYTE selector =
+            *(BYTE*)RVA_TO_VA(0x69C8A9);
+
+        void* selectedSlot =
+            (selector == 0) ? slotA : slotB;
+
+        // RVA 0x1717F57
+        StackArgument5 = NumberOfBytesTransferred;
+
+        // RVA 0x1717FEF
+        NTSTATUS result =
+            CALL_FUNCTION_POINTER(
+                *(void**)selectedSlot,
+                TargetAddress,
+                SourceAddress,
+                NumberOfBytes,
+                Flags,
+                NumberOfBytesTransferred
+            );
+
+        // RVA 0x1718071
+        InterlockedDecrement(&amp;g_ActiveCalls);
+
+        // RVA 0x17180E4
+        return result;
+    }
+}
+</pre></div>
+
+
+<p class="wp-block-paragraph">Note that the above code is just for illustrating it in a readable way. I couldn’t figure out what both alternative handlers are doing yet, it could do a stack walk or check the caller in some other, non-obvious way. All i know is that this code is being executed whenever someone calls <strong>MmCopyMemory</strong> in that short activity period of EA’s hook. When it comes to how long they keep this modification intact before removing it, during my own limited tests i have measured a time less than 10 seconds. Mostly around 6 seconds but the precision of my logger’s time component shouldn’t be over-trusted here. I’d verify this further later. For the meanwhile, below you can see some event graphs for the specific mechanism i use to track writes.</p>
+
+
+
+<figure class="wp-block-image size-full"><img fetchpriority="high" decoding="async" width="520" height="170" src="https://blog.drof.space/wp-content/uploads/2026/10/image-7.png" alt="" class="wp-image-559" srcset="https://blog.drof.space/wp-content/uploads/2026/10/image-7.png 520w, https://blog.drof.space/wp-content/uploads/2026/10/image-7-300x98.png 300w" sizes="(max-width: 520px) 100vw, 520px"></figure>
+
+
+
+<figure class="wp-block-image size-large"><img decoding="async" width="1024" height="245" src="https://blog.drof.space/wp-content/uploads/2026/10/image-5-1024x245.png" alt="" class="wp-image-556" srcset="https://blog.drof.space/wp-content/uploads/2026/10/image-5-1024x245.png 1024w, https://blog.drof.space/wp-content/uploads/2026/10/image-5-300x72.png 300w, https://blog.drof.space/wp-content/uploads/2026/10/image-5-766x183.png 766w, https://blog.drof.space/wp-content/uploads/2026/10/image-5-850x203.png 850w, https://blog.drof.space/wp-content/uploads/2026/10/image-5.png 1272w" sizes="(max-width: 1024px) 100vw, 1024px"></figure>
+
+
+
+<p class="wp-block-paragraph">In the above picture, you can see a pair of 2 writes for each observed event spike. I classified the first one as a patch operation and the second as a restore operation. I’m still having my doubts with the patch actually being active for 6 seconds, as that seems quite long and i personally just think i’d need to look into some logging code to figure out if that’s realistic. Will edit this once i get more insight on it. </p>
+
+
+
+<p class="wp-block-paragraph">Either way, because both secondary handlers for the virtual and physical copy operation are within the hungarian packer’s section, aka .grfn1, i couldn’t really advance any further here. It’s something for the future because right now, what i got back from my read is just straight up zeros for that. Possibly it is only mapped when the hook is active, but i really have no idea honestly. It could be intentionally mapped as its needed, obfuscated in some way, packed or virtualized. I have zero experience with this packer. And honestly too lazy to spend additional time on it. I know it would probably answer a lot of our questions though. Skill issue IG.</p>
+
+
+
+<div aria-hidden="true" class="wp-block-spacer"></div>
+
+
+
+<p class="wp-block-paragraph">Although we might not know how they use this hook and if they care about more than just return address, it’s safe to say that whatever is inside those secondary handlers has access to the arguments the caller passed into MmCopyMemory, plus the address that the MmCopyMemory call would have returned on. I would assume since they leave it installed for such a short time, maybe it is intended to detect obvious hooks on this specific API. It would make more sense if i could check if they fabricate any calls to MmCopyMemory from eaanticheat.sys, which could make this more plausible. They could also possibly be targeting people who are reading physical memory with it, either from the game or other stuff you aren’t supposed to access. I’ll stop here, hope it was enough to illustrate the point.</p>
+
+
+
+<p class="wp-block-paragraph">I was baffled when i figured out that they actually deploy this in their prod. It was hard to believe, and seems to cause issues for some people. What i find weird is that it doesn’t always seem to hook it. But at least one legit player has also seemingly experienced it. We’d need the crash dump to know for sure, but it does look highly weird. Why would the prologue of MmCopyMemory start with moving some address inside eaanticheat.sys into RAX? So i suspect it is either randomized or maybe conditionally triggered. I’d need to do more testing to get a better idea.</p>
+
+
+
+<figure class="wp-block-image size-large"><img decoding="async" width="1024" height="838" src="https://blog.drof.space/wp-content/uploads/2026/10/image-9-1024x838.png" alt="" class="wp-image-568" srcset="https://blog.drof.space/wp-content/uploads/2026/10/image-9-1024x838.png 1024w, https://blog.drof.space/wp-content/uploads/2026/10/image-9-300x245.png 300w, https://blog.drof.space/wp-content/uploads/2026/10/image-9-367x300.png 367w, https://blog.drof.space/wp-content/uploads/2026/10/image-9-768x628.png 768w, https://blog.drof.space/wp-content/uploads/2026/10/image-9.png 1077w" sizes="(max-width: 1024px) 100vw, 1024px"></figure>
+
+
+
+<p class="wp-block-paragraph">Do you notice anything? The player-posted crash dump seems to show the address of MmCopyMemory at the time of the crash. Including a disassembly of the first instruction that is currently located there. Let’s see what it is:</p>
+
+
+<div class="wp-block-syntaxhighlighter-code "><pre class="brush: plain; title: ; notranslate">
+nt!MmCopyMemory+0:
+mov rax, eaanticheat+0x335390
+</pre></div>
+
+
+<p class="wp-block-paragraph">That’s definitely not what MmCopyMemory should look like. Also, taking a further look at the player-attached apex crash text file, i noticed something even more hilarious and memeworthy. So apparently, what actually happened was: Microsoft’s KPP just owned the player because the elite S.P.E.A.R team had installed a hook inside the player’s ntoskrnl!MmCopyMemory routine. LMFAO. You cant make this shit up.</p>
+
+
+
+<figure class="wp-block-image size-full"><img loading="lazy" decoding="async" width="983" height="433" src="https://blog.drof.space/wp-content/uploads/2026/10/image-10.png" alt="" class="wp-image-572" srcset="https://blog.drof.space/wp-content/uploads/2026/10/image-10.png 983w, https://blog.drof.space/wp-content/uploads/2026/10/image-10-300x132.png 300w, https://blog.drof.space/wp-content/uploads/2026/10/image-10-767x338.png 767w, https://blog.drof.space/wp-content/uploads/2026/10/image-10-681x300.png 681w" sizes="auto, (max-width: 983px) 100vw, 983px"></figure>
+
+
+
+<figure class="wp-block-image size-large"><img loading="lazy" decoding="async" width="1024" height="579" src="https://blog.drof.space/wp-content/uploads/2026/10/image-11-1024x579.png" alt="" class="wp-image-575" srcset="https://blog.drof.space/wp-content/uploads/2026/10/image-11-1024x579.png 1024w, https://blog.drof.space/wp-content/uploads/2026/10/image-11-300x170.png 300w, https://blog.drof.space/wp-content/uploads/2026/10/image-11-768x434.png 768w, https://blog.drof.space/wp-content/uploads/2026/10/image-11-531x300.png 531w, https://blog.drof.space/wp-content/uploads/2026/10/image-11.png 1318w" sizes="auto, (max-width: 1024px) 100vw, 1024px"></figure>
+
+
+
+<p class="wp-block-paragraph">You can see that arg4 of the bugcheck indicates “modification of a function or .pdata” (1). Additionally, arg3 which in PatchGuard is usually the address where corruption/patching was detected, exactly matches with the address of the player’s MmCopyMemory inside their ntoskrnl. Consider checking out <a href="https://standa-note.blogspot.com/2015/10/some-tips-to-analyze-patchguard.html">this </a>resource if your want to learn about how to interpret KPP crash dumps.</p>
+
+
+
+<p class="wp-block-paragraph">I don’t want to pretend like i know how often this issue actually arises during legitimate play. I myself have crashed a couple times under my own environment, also around MmCopyMemory, but it was because i was hooking MmCopyMemory as well. With the difference being that i didn’t smoke my computer whenever KPP ran its integrity check on it. I simply had a logic issue in how i handle conflicting writes to my own patches. Because i have never encountered anything like that on Easy Anti-Cheat, for the pages that i was interested in, it seems like i previously missed this bug in my implementation.</p>
+
+
+
+<p class="wp-block-paragraph">I didn’t even expect to find something like this in a production grade anti-cheat software. Don’t get me wrong, EAC and all the other anti-cheats also have their own nasty memes and tricks. But they’re usually not going as far as directly patching stuff inside your kernel. And if they do, they usually handle KPP in one way or another. Some examples for this are either disarming PatchGuard somehow, so that it doesn’t cause issues, blind a specific check or something similar in that direction. Possibly there is some 200 iq methods i haven’t thought of. My assumption is either they bypass PatchGuard’s checks somehow, but their approach is not preventing it from detecting them occasionally, or they’re racing it. I think the former would be more plausible, if we consider who has worked on Javelin and their technical backgrounds.</p>
+
+
+
+<p class="wp-block-paragraph">What caught me offguard with this one was simply the fact that it did something unexpected. I guess this worked out well for them if they actually use this for cheat detection, which again i can’t prove since i have no insights into what happens after execution is handed off to the to me inaccessible handlers that are responsible for taking care of different MmCopyMemory operations. </p>
+
+
+
+<p class="wp-block-paragraph">In some way i guess they smoked me since both of my accounts have been banned. I was able to do some additional testing and verification of what we’ve talked about. I temporarily disabled my own hook and simply looked who is doing what with the page inside ntoskrnl where the MmCopyMemory function resides. And then it clicked. </p>
+
+
+
+<figure class="wp-block-image size-full"><img loading="lazy" decoding="async" width="1024" height="577" src="https://blog.drof.space/wp-content/uploads/2026/10/image-13.png" alt="" class="wp-image-586" srcset="https://blog.drof.space/wp-content/uploads/2026/10/image-13.png 1024w, https://blog.drof.space/wp-content/uploads/2026/10/image-13-300x169.png 300w, https://blog.drof.space/wp-content/uploads/2026/10/image-13-532x300.png 532w, https://blog.drof.space/wp-content/uploads/2026/10/image-13-767x432.png 767w" sizes="auto, (max-width: 1024px) 100vw, 1024px"></figure>
+
+
+
+<p class="wp-block-paragraph">I exited apex that day, after completing my experiments on Nov 5 and went to the dentist. When i came back i had a beautiful ban email from EA,. It was for my second account that i created on Nov 2. It could’ve been anything at this point, and after seeing how mentally insane EA’s S.P.E.A.R team is, i think at this point they could’ve been hooking other stuff too. And possibly doing much more outrageous things. I’d rather wave the white flag instead of bothering any further.</p>
+
+
+
+<p class="wp-block-paragraph">The issue would not even be finding or disarming their hooks. For this specific technique of EA, you could do the following:</p>
+
+
+
+<ol class="wp-block-list">
+<li>Take a look at your ntoskrnl.exe, which can be different across OS builds. Locate the MmCopyMemory function.</li>
+
+
+
+<li>If you’re on Windows 10, you will most likely see a bunch of MOV and PUSH instructions at its prologue.</li>
+
+
+
+<li>If you don’t need it to support different OS builds, you can now simply build a little stub that basically simulates the real prologue of MmCopyMemory, and then jump to the actual MmCopyMemory function with an offset, so that you don’t execute the first 12 bytes at all on the real one. Since we know exactly which gadget they’re using, it’s quite easy.</li>
+
+
+
+<li>So, the flow basically is: you invoke your MmCopyMemory wrapper —&gt; it runs the same instructions of the known-good prologue that you have recovered from your ntoskrnl —&gt; then jumps to ( ntoskrnl.MmCopyMemory + &lt;instructions to skip from the potentially patched real prologue&gt;. The idea is that you’d execute enough of the prologue that you can skip EA’s hook entirely, and jump a little further than their meme inline hook, so if you call your wrapper it won’t trigger it at all.</li>
+</ol>
+
+
+
+<p class="wp-block-paragraph">Even though you could detect this too, one could simply stop relying on this API for memory access, and use other means to achieve the same thing. Or simply disable EA’s hook, check if its hooked by reading the prologue, restore the site around the patched function to a known good value, right before calling it, etc… However these would mostly just be a fat race condition. And it’s unnecessary unless EA starts hooking the mid or end of a function, or deploys more sophisticated methods of intercepting execution.</p>
+
+
+
+<p class="wp-block-paragraph">What you’d actually need to do in order to have a chance against them, though, is finding every other technique they’re using, confirm it’s used for cheat detection, and somehow either avoid or blind them one by one. I know you can simplify this process if your goal is to stay below ban thresholds instead of achieving perfectly clean telemetry measurements. But it’s still time consuming and in the end you will possibly be clapped by their raw input measurement AI, regardless of how sophisticated your approach is. Again, only assuming Anybrain is actually worth its salt.</p>
+
+
+
+<div aria-hidden="true" class="wp-block-spacer"></div>
+
+
+
+<h2 class="wp-block-heading">Part 2:  Possible removal of Theia</h2>
+
+
+
+<p class="wp-block-paragraph">I don’t know if they completely got rid of everything related to Theia, which used to be their anti-tamper/packer hybrid solution. But Apex seems to no longer be using a dynamic scheme for keeping stale code pages encrypted. Previously, you’d have to deal with incomplete dumps and a lot of issues with your disassembler, due to scenarios like a page in the midst of others being encoded, while the others are in decoded state. So if your using something like IDA Pro, it might confuse perfectly valid code that is surrounding this encoded block as data, even if it is perfectly valid instructions.</p>
+
+
+
+<p class="wp-block-paragraph">I previously dealt with this by building a script that attempts to automate this process of marking these adjacent valid instructions as code. It worked fine for thwe most part, and with some manual intervention here and there, it was mostly manageable. Most of the time, if i had a goal of understanding how something works, i was able to achieve it using my old method of dumping. It was everything BUT convenient, but it was manageable. Even if sometimes i had important code in these cold pages which would have been a blessing to be allowed to inspect.</p>
+
+
+
+<p class="wp-block-paragraph">When it comes to attacking Theia itself or leveraging a flaw within its components and their design, i have tried it but ultimately gave up. In my case, my tooling and current knowledge was simply not mature enough to progress in reasonable speed while working on understanding it. I was able to reconstruct some parts like their exception handling mechanism, and some of the other protections they have offered. Also taken a look at their hardware identification methods, and inspected some interesting system calls they were making. Some of it has lead to a dead end, while others have taught me a lot of useful knowledge about it.</p>
+
+
+
+<div aria-hidden="true" class="wp-block-spacer"></div>
+
+
+
+<figure class="wp-block-image size-full"><img loading="lazy" decoding="async" width="1024" height="1024" src="https://blog.drof.space/wp-content/uploads/2026/10/006ee9ac-a21d-4be1-8c6a-13638ee0ca0b.jpg" alt="" class="wp-image-545" srcset="https://blog.drof.space/wp-content/uploads/2026/10/006ee9ac-a21d-4be1-8c6a-13638ee0ca0b.jpg 1024w, https://blog.drof.space/wp-content/uploads/2026/10/006ee9ac-a21d-4be1-8c6a-13638ee0ca0b-150x150.jpg 150w, https://blog.drof.space/wp-content/uploads/2026/10/006ee9ac-a21d-4be1-8c6a-13638ee0ca0b-300x300-2.jpg 300w, https://blog.drof.space/wp-content/uploads/2026/10/006ee9ac-a21d-4be1-8c6a-13638ee0ca0b-768x768.jpg 768w, https://blog.drof.space/wp-content/uploads/2026/10/006ee9ac-a21d-4be1-8c6a-13638ee0ca0b-24x24.jpg 24w, https://blog.drof.space/wp-content/uploads/2026/10/006ee9ac-a21d-4be1-8c6a-13638ee0ca0b-48x48.jpg 48w, https://blog.drof.space/wp-content/uploads/2026/10/006ee9ac-a21d-4be1-8c6a-13638ee0ca0b-96x96.jpg 96w" sizes="auto, (max-width: 1024px) 100vw, 1024px"></figure>
+
+
+
+<h2 class="wp-block-heading">Part 3: Possible Integration of an AI solution for Player Input Measuring</h2>
+
+
+
+<p class="wp-block-paragraph">Okay, so let’s get to the fun part. In Season 29, when Apex had still used EAC, i decided to poke around r5apex_dx12.exe. I didn’t have a specific goal in mind, except for some game cheats related stuff. But then, as i was deep in the trenches trying to discover some old stuff that had now changed, i found something that was initially hard to believe: Anybrain. I immediately checked all sorts of social media for any announcements, but there was none i could find. Surely someone must have talked about it on cheating forums, right? Nope.</p>
+
+
+<div class="wp-block-syntaxhighlighter-code "><pre class="brush: plain; title: ; notranslate">
+.rdata:0000000002CEF5E2	0000000E	C	anybrain.proto
+.rdata:0000000002CEF5F1	00000017	C	\bAnybrain\"U\n\nPlayerData
+.rdata:0000000002CEF61C	00000012	C	.Anybrain.Metadata
+.rdata:0000000002CEF63E	00000014	C	.Anybrain.InputData\"
+.rdata:0000000002CEF6AE	00000014	C	.Anybrain.ScreenInfo
+.rdata:0000000002CEF6DF	00000019	C	.Anybrain.InputDeviceInfo
+.rdata:0000000002CEF70F	00000022	C	.Anybrain.ClientInfo\"\\\n\nScreenInfo
+.rdata:0000000002CEF7D9	00000020	C	.Anybrain.MouseSens\"-\n\tMouseSens
+.rdata:0000000002CEF846	00000019	C	.Anybrain.OperatingSystem
+.rdata:0000000002CEF876	00000015	C	.Anybrain.Environment
+.rdata:0000000002CEF8A2	00000014	C	.Anybrain.FormFactor
+.rdata:0000000002CEF912	00000014	C	.Anybrain.MouseInput
+.rdata:0000000002CEF93A	00000017	C	.Anybrain.KeyboardInput
+.rdata:0000000002CEF962	00000014	C	.Anybrain.TouchInput
+.rdata:0000000002CEF98C	0000001A	C	.Anybrain.ControllerInput\"
+.rdata:0000000002CEF9E6	0000001A	C	.Anybrain.MouseEventButton
+.rdata:0000000002CEFA17	00000019	C	.Anybrain.MouseEventMove\"
+.rdata:0000000002CEFA5B	00000019	C	.Anybrain.MouseButtonType
+.rdata:0000000002CEFADE	00000012	C	.Anybrain.EventRLE
+.rdata:0000000002CEFAFD	00000012	C	.Anybrain.EventRLE
+.rdata:0000000002CEFB1F	00000012	C	.Anybrain.EventRLE
+.rdata:0000000002CEFB45	00000012	C	.Anybrain.EventRLE
+.rdata:0000000002CEFB70	0000001E	C	.Anybrain.EventRLE\"+\n\bEventRLE
+.rdata:0000000002CEFBED	00000028	C	.Anybrain.KeyboardEvent\"J\n\rKeyboardEvent
+.rdata:0000000002CEFC86	00000014	C	.Anybrain.TouchEvent
+.rdata:0000000002CEFCA8	00000014	C	.Anybrain.TouchEvent
+.rdata:0000000002CEFCCA	00000022	C	.Anybrain.TouchEvent\"d\n\nTouchEvent
+.rdata:0000000002CEFDA3	0000001F	C	.Anybrain.ControllerEventButton
+.rdata:0000000002CEFDD2	00000025	C	(\v2!.Anybrain.ControllerEventJoystick
+.rdata:0000000002CEFE07	00000027	C	(\v2 .Anybrain.ControllerEventTrigger\"h\n
+.rdata:0000000002CEFE5B	0000001E	C	.Anybrain.ControllerButtonType
+.rdata:0000000002CEFEBE	00000017	C	.Anybrain.JoystickEvent
+.rdata:0000000002CEFEE3	00000028	C	.Anybrain.JoystickEvent\"3\n\rJoystickEvent
+.rdata:0000000002CEFF57	00000016	C	.Anybrain.TriggerEvent
+.rdata:0000000002CEFF7B	00000019	C	.Anybrain.TriggerEvent\",\n
+.rdata:0000000002CF0358	0000002C	C	c:\\depot\\r5-301\\src\\security\\anybrain.pb.cc
+.rdata:0000000002CF0388	0000000F	C	anybrain.proto
+.rdata:0000000002CF1208	0000001A	C	Anybrain.Metadata.user_id
+.rdata:0000000002CF1228	0000001D	C	Anybrain.Metadata.session_id
+.rdata:0000000002CF1248	0000001D	C	Anybrain.Metadata.ip_address
+.rdata:0000000002CF1268	00000025	C	Anybrain.InputDeviceInfo.device_name
+.rdata:0000000002CF1290	0000001D	C	Anybrain.InputDeviceInfo.vid
+.rdata:0000000002CF12B0	0000001D	C	Anybrain.InputDeviceInfo.pid
+.rdata:0000000002CF12D0	0000001E	C	Anybrain.ClientInfo.device_id
+.rdata:0000000002CF12F0	00000021	C	Anybrain.ClientInfo.device_model
+.rdata:0000000002CF1318	0000001F	C	Anybrain.ClientInfo.user_agent
+.rdata:0000000002CF1338	0000001C	C	Anybrain.KeyboardEvent.code
+.rdata:0000000002FF51E0	00000012	C	8-1-anyb-rollout
+</pre></div>
+
+
+<p class="wp-block-paragraph">I was under disbelief for a long time, until i discovered <a href="https://snip.frame.boats/?09096a1d57a8e757#FSRZLTWP1mWnCUiwXrnHNg4DUaNTXoMW996DfydSAhBb">some code</a> which seems to be some form of A/B testing system. Basically, your Apex client requests a list of so called Experiments from their servers. It submits some fields including your account/nucleus-ID, your platform and some other stuff. And then receives back a list of experiments, with what i assume is their internal identifiers and the current state of the experiment. If an experiment has a state of “EXPERIMENT_ONGOING”, it is considered as active.</p>
+
+
+
+<p class="wp-block-paragraph">In case of the Experiment with internal identifier “8-1-anyb-rollout”, if your Apex client receives “treatment-a” from the A/B testing backend response, it will set up some extra stuff and also set a ConVar named “raw_input_client_send_enable” to a certain value, based on the result of the above checks. In order to understand why this ConVar matters, let’s take a look at who is using it:</p>
+
+
+<div class="wp-block-syntaxhighlighter-code "><pre class="brush: cpp; title: ; notranslate">
+void __fastcall R5::InputTelemetry::DrainQueue(__int64 a1)
+{
+  if ( dword_3623E2C == 0
+    &amp;&amp; *((_DWORD *)cvar::r5::raw_input_collection_disable + 23) == 0
+    &amp;&amp; *((_DWORD *)cvar::r5::raw_input_client_send_enable + 23) != 0 )
+  {
+    if ( qword_3623DE8 == 0 || dword_36240B0 == 1 || *(_BYTE *)(qword_3623DE8 + 3) != 0 )
+    {
+      v11 = *(_DWORD *)(a1 + 65616);
+      *(_DWORD *)(a1 + 65624) = 0;
+      *(_BYTE *)(a1 + 66284) = 0;
+      *(_DWORD *)(a1 + 65620) = v11;
+    }
+    else if ( TryEnterCriticalSection(lpCriticalSection: (LPCRITICAL_SECTION)(a1 + 66288)) )
+    {
+      LeaveCriticalSection(lpCriticalSection: (LPCRITICAL_SECTION)(a1 + 66288));
+      if ( 2048 - *(_DWORD *)(a1 + 65628) &gt; 128 )
+      {
+        v2 = *(_DWORD *)(a1 + 65620);
+        if ( v2 == *(_DWORD *)(a1 + 65616) )
+        {
+          *(_DWORD *)(a1 + 65620) = 0;
+          v2 = 0;
+        }
+        if ( v2 != *(_DWORD *)(a1 + 65624) )
+        {
+          v3 = 32LL * v2;
+          if ( *(_DWORD *)(a1 + 65632) == 0 )
+            *(_DWORD *)(a1 + 65632) = *(_DWORD *)(v3 + a1 + 80);
+          v4 = *(_DWORD *)(v3 + a1 + 80);
+          do
+          {
+            v5 = (unsigned int *)(a1 + 32LL * v2 + 80);
+            v6 = *v5;
+            v7 = R5::InputTelemetry::ProcessData(a1, a2: v5);
+            v8 = *(_DWORD *)(a1 + 65628);
+            ++*(_DWORD *)(a1 + 65620);
+            v9 = v7 + v8;
+            v2 = *(_DWORD *)(a1 + 65620);
+            *(_DWORD *)(a1 + 65628) = v9;
+            if ( v2 == *(_DWORD *)(a1 + 65616) )
+            {
+              *(_DWORD *)(a1 + 65620) = 0;
+              v2 = 0;
+            }
+          }
+          while ( 2048 - v9 &gt; 128 &amp;&amp; v2 != *(_DWORD *)(a1 + 65624) );
+          v10 = *(_DWORD *)(a1 + 24);
+          if ( v10 == 0 )
+          {
+            *(_DWORD *)(a1 + 24) = v4;
+            v10 = v4;
+          }
+          *(_DWORD *)(a1 + 28) = v6;
+          *(_DWORD *)(a1 + 32) = v10;
+          if ( 2048 - v9 &lt;= 128 )
+            sub_1A36B90(a1: 2, a2: 0, a3: (__int64)R5::SendInputTelemetry2, a4: 0);
+        }
+      }
+    }
+  }
+}
+</pre></div>
+
+
+<p class="wp-block-paragraph">In this beautiful code snippet, you can see that sub_1A36B90 is used to dispatch the execution of a certain function later on named R5::SendInputTelemetry2. Its job is to check the ConVar <strong>raw_input_client_send_enable</strong>, and if its value in the convar system is not zero, it will serialize some data and then transmit it to the game server via the same connection ordinary gameplay/engine related traffic passes through. In order to understand it better, lets take a look at <strong>SendInputTelemetry2</strong>. And yes, as the name suggests, there is at least one different path that accomplishes something very similar. You could call it redundancy or simply they are different in semantics.</p>
+
+
+<div class="wp-block-syntaxhighlighter-code "><pre class="brush: plain; title: ; notranslate">
+void __fastcall R5::SendPlayerInputTelemetry2(__int64 a1)
+{
+  EnterCriticalSection(lpCriticalSection: (LPCRITICAL_SECTION)(a1 + 66288));
+  v2 = *(_DWORD *)(a1 + 28) - *(_DWORD *)(a1 + 24);
+  v11 = 256;
+  *(_DWORD *)(a1 + 24) = 0;
+  v12 = 0;
+  v8 = &amp;amp;unk_9A7ED20;
+  v9 = 2048;
+  v10 = 0x4000;
+  R5Net::WriteBits(a1: (__int64)&amp;amp;v8, a2: 1u, a3: 16);
+  v19 = *(_QWORD *)(a1 + 8);
+  R5Net::WriteBits(a1: (__int64)&amp;amp;v8, a2: v19, a3: 32);
+  R5Net::WriteBits(a1: (__int64)&amp;amp;v8, a2: HIDWORD(v19), a3: 32);
+  if ( R5::SerializeSomeNetBufferBits(a1: a1 + 65632, a2: (__int64)&amp;amp;v8) )
+  {
+    v3 = HIDWORD(v10) + 7;
+    *(_DWORD *)(a1 + 65632) = 0;
+    v4 = v3 &gt;&gt; 3;
+    *(_QWORD *)(a1 + 65648) = 0;
+    Utils::EnsureCapacity16(a1: a1 + 65656, a2: 0);
+    *(_DWORD *)(a1 + 65664) = 0;
+    Utils::EnsureCapacity16(a1: a1 + 65688, a2: 0);
+    *(_DWORD *)(a1 + 65696) = 0;
+    Utils::EnsureCapacity16(a1: a1 + 65720, a2: 0);
+    *(_DWORD *)(a1 + 65728) = 0;
+    Utils::EnsureCapacity16(a1: a1 + 65752, a2: 0);
+    *(_DWORD *)(a1 + 65760) = 0;
+    Utils::EnsureCapacity16(a1: a1 + 65784, a2: 0);
+    *(_DWORD *)(a1 + 65792) = 0;
+    Utils::EnsureCapacity16(a1: a1 + 65816, a2: 0);
+    *(_DWORD *)(a1 + 65824) = 0;
+    resize_and_copy_buf(a1: a1 + 65848, a2: 0);
+    *(_DWORD *)(a1 + 65856) = 0;
+    resize_and_copy_buf(a1: a1 + 65880, a2: 0);
+    *(_DWORD *)(a1 + 65888) = 0;
+    resize_and_copy_buf(a1: a1 + 65912, a2: 0);
+    *(_DWORD *)(a1 + 65920) = 0;
+    sub_1B6A1D0(a1: a1 + 65944, a2: 0);
+    *(_DWORD *)(a1 + 65952) = 0;
+    sub_1B6A1D0(a1: a1 + 65976, a2: 0);
+    *(_DWORD *)(a1 + 65984) = 0;
+    resize_and_copy_buf(a1: a1 + 66008, a2: 0);
+    *(_DWORD *)(a1 + 66016) = 0;
+    resize_and_copy_buf(a1: a1 + 66040, a2: 0);
+    *(_DWORD *)(a1 + 66048) = 0;
+    *(_DWORD *)(a1 + 65628) = 0;
+    if ( v2 != 0 )
+      v5 = (double)v4 / ((double)v2 / 1000.0);
+    else
+      v5 = 0.0;
+    *(_DWORD *)(a1 + 66272) += v4;
+    *(_DWORD *)(a1 + 66276) += v2;
+    v6 = v5;
+    if ( v6 &gt; *(float *)(a1 + 66280) )
+      *(float *)(a1 + 66280) = v6;
+    v7 = gpNetChan;
+    v14 = 0;
+    v16 = 0;
+    netMsg = off_3007568;
+    v15 = 0;
+    v17 = &amp;amp;unk_9A7ED20;
+    v18 = v4;
+    C_NetChan::SendNetMsg(a1: gpNetChan, a2: (__int64)&amp;amp;netMsg, a3: 0, a4: 0);
+    C_NetChan::SendDatagram(a1: v7, a2: 0);
+  }
+  LeaveCriticalSection(lpCriticalSection: (LPCRITICAL_SECTION)(a1 + 66288));
+}
+</pre></div>
+
+
+<p class="wp-block-paragraph">Let’s take a look at the second variant. It makes use of a different serialization function. </p>
+
+
+<div class="wp-block-syntaxhighlighter-code "><pre class="brush: plain; title: ; notranslate">
+void __fastcall R5AC::CollectInputTelemetryAndSend(LARGE_INTEGER *lpPerformanceCount)
+{
+  if ( dword_3623E2C == 0 )
+  {
+    v2 = cvar::r5::raw_input_collection_disable;
+    if ( *((_DWORD *)cvar::r5::raw_input_collection_disable + 23) == 0 )
+    {
+      bEnableClientSend = cvar::r5::raw_input_client_send_enable;
+      if ( *((_DWORD *)cvar::r5::raw_input_client_send_enable + 23) != 0 )
+      {
+        if ( lpPerformanceCount[8277].LowPart == 0 )
+        {
+          (*((void (__fastcall **)(_UNKNOWN **, __int64 (__fastcall *)()))off_6ACB810 + 39))(
+            a1: &amp;amp;off_6ACB810,
+            a2: R5::SomeCallbackAnticheat);
+          v4 = WORD6(xmmword_36EC9B0);
+          v5 = xmmword_36EC9C0;
+          QueryPerformanceCounter(lpPerformanceCount: &amp;amp;PerformanceCount);
+          v6 = PerformanceCount.QuadPart - ::PerformanceCount.QuadPart;
+          WORD2(PerformanceCount.QuadPart) = v5;
+          HIWORD(PerformanceCount.QuadPart) = v4;
+          PerformanceCount.LowPart = v6 / qword_6EFA2E0;
+          v7 = GrowArrayAndAppendSlot(a1: &amp;amp;lpPerformanceCount[8276], a2: v6 % qword_6EFA2E0);
+          v8 = lpPerformanceCount[8276];
+          InterfaceClassGuid[0] = 932045900;
+          InterfaceClassGuid[1] = 298931951;
+          *(LARGE_INTEGER *)(v8.QuadPart + 8LL * v7) = PerformanceCount;
+          InterfaceClassGuid[2] = -1610576708;
+          LODWORD(InterfaceClassGuid_12) = -586869559;
+          R5::EnumerateHidDevicesAndExtractVidAndPid((GUID *)InterfaceClassGuid);
+          InterfaceClassGuid[0] = -2008312125;
+          InterfaceClassGuid[1] = 298931951;
+          InterfaceClassGuid[2] = -1610576708;
+          LODWORD(InterfaceClassGuid_12) = -586869559;
+          R5::EnumerateHidDevicesAndExtractVidAndPid((GUID *)InterfaceClassGuid);
+          lpPerformanceCount[1].QuadPart = 1000 * sub_2C26BD8(a1: 0);
+          QueryPerformanceCounter(lpPerformanceCount);
+          if ( dword_3623E2C != 0 )
+          {
+LABEL_13:
+            BYTE4(lpPerformanceCount[8285].QuadPart) = 1;
+            return;
+          }
+          v2 = cvar::r5::raw_input_collection_disable;
+          bEnableClientSend = cvar::r5::raw_input_client_send_enable;
+        }
+        if ( v2[23] == 0 &amp;amp;&amp;amp; bEnableClientSend[23] != 0 )
+        {
+          v12 = 256;
+          v13 = 0;
+          *(_QWORD *)InterfaceClassGuid = &amp;amp;unk_9A7ED20;
+          InterfaceClassGuid[2] = 2048;
+          InterfaceClassGuid_12 = 0x4000;
+          R5Net::WriteBits(a1: InterfaceClassGuid, a2: 2, a3: 16);
+          PerformanceCount = lpPerformanceCount[1];
+          ((void (__fastcall *)(_QWORD, _QWORD, _QWORD))R5Net::WriteBits)(
+            a1: InterfaceClassGuid,
+            a2: (LARGE_INTEGER)PerformanceCount.QuadPart,
+            a3: 32);
+          R5Net::WriteBits(a1: InterfaceClassGuid, a2: (unsigned int)PerformanceCount.HighPart, a3: 32);
+          if ( (unsigned __int8)R5::SerializeInputTelemetryMaybe(a1: &amp;amp;lpPerformanceCount[8263], a2: InterfaceClassGuid) != 0 )
+          {
+            if ( (_BYTE)v12 != 0 )
+            {
+              sub_1C1BFF0(a1: "anticheat.raw_input.match.send_buffer_overflow:1|c\n");
+            }
+            else
+            {
+              v9 = gpNetChan;
+              v14 = off_3007568;
+              v15 = 0;
+              v19 = (HIDWORD(InterfaceClassGuid_12) + 7) &gt;&gt; 3;
+              v17 = 0;
+              v18 = &amp;amp;unk_9A7ED20;
+              v16 = 1;
+              C_NetChan::SendNetMsg(a1: gpNetChan, a2: (__int64)&amp;amp;v14, a3: 1, a4: 0);
+              C_NetChan::SendDatagram(a1: v9, a2: 0);
+            }
+          }
+        }
+        goto LABEL_13;
+      }
+    }
+  }
+}
+</pre></div>
+
+
+<p class="wp-block-paragraph">This one seems interesting because alongside the usual input telemetry bullshit, you also encounter a function that seems to enumerate all HID devices via SetupAPI, and then extract their <strong>Vendor-ID</strong> and <strong>Product-ID</strong> to then save it in a global, dynamic array through another helper function. Our next steps in understanding this better would be inspecting what kind of data it actually sends. This is on my todo list and i will release a second part of this post once i have gotten around to do all of this extra work. Until then, you can view the serialization functions yourself <a href="https://snip.frame.boats/?0776479c65bf48fb#9Mxx8G6W8eQr8JupAydN2iWqWyvyHDnXMGKRf21awnok">here</a>. If you care about how the data is processed before sending, feel free to check <a href="https://snip.frame.boats/?3bea50e8ffa8ab9f#HNENciZExbCFvitvRfDQETcYW2zJfU26VWdSdEKxfsbt">this </a>out. It contains some very good stuff specifically for handling the processing of different input methods.</p>
+
+
+
+<p class="wp-block-paragraph">I additionally was interested in determining whether this A/B testing mechanism for Anybrain even executed at all. If you read closely, i have previously been targeting the network dispatch path instead of the A/B testing bootstrapper function. The latter would only lead to an observable execution if i managed to land within the target activation group in their testing system. Or more precisely, whether the experiment is even ongoing at all. In order to do this reliably, i decided to leverage a breakpoint. Let’s first take a look at the raw assembly for the check:</p>
+
+
+<div class="wp-block-syntaxhighlighter-code "><pre class="brush: cpp; title: ; notranslate">
+.text:0000000001AC86F9                loc_1AC86F9:                            ; CODE XREF: R5__Experiments__CheckAndBootstrapAnybrainAB+29F↑j
+.text:0000000001AC86F9                                                        ; R5__Experiments__CheckAndBootstrapAnybrainAB+2AD↑j ...
+.text:0000000001AC86F9 48 85 F6                       test    rsi, rsi
+.text:0000000001AC86FC 0F 84 59 05 00                 jz      loc_1AC8C5B
+.text:0000000001AC86FC 00
+.text:0000000001AC8702 0F B6 16                       movzx   edx, byte ptr [rsi]
+.text:0000000001AC8705 4C 8D 05 4D CA                 lea     r8, aExperimentOngo+1 ; "XPERIMENT_ONGOING"
+.text:0000000001AC8705 52 01
+.text:0000000001AC870C 38 15 46 CA 52                 cmp     byte ptr cs:aExperimentOngo, dl ; "EXPERIMENT_ONGOING"
+.text:0000000001AC870C 01
+.text:0000000001AC8712 49 8B C8                       mov     rcx, r8
+.text:0000000001AC8715 75 1D                          jnz     short loc_1AC8734
+.text:0000000001AC8717 48 8B C6                       mov     rax, rsi
+.text:0000000001AC871A 49 2B C0                       sub     rax, r8
+.text:0000000001AC871D 4C 8D 40 01                    lea     r8, [rax+1]
+.text:0000000001AC8721
+.text:0000000001AC8721                KEEP_COMPARING_NEXT:                    ; CODE XREF: R5__Experiments__CheckAndBootstrapAnybrainAB+302↓j
+.text:0000000001AC8721 84 D2                          test    dl, dl
+.text:0000000001AC8723 74 4C                          jz      short DO_FURTHER_CHECKS_AND_TOGGLE_ANYB
+.text:0000000001AC8725 41 0F B6 14 08                 movzx   edx, byte ptr [r8+rcx]
+.text:0000000001AC872A 0F B6 01                       movzx   eax, byte ptr [rcx]
+.text:0000000001AC872D 48 FF C1                       inc     rcx
+.text:0000000001AC8730 3A C2                          cmp     al, dl
+.text:0000000001AC8732 74 ED                          jz      short KEEP_COMPARING_NEXT
+.text:0000000001AC8734
+.text:0000000001AC8734                loc_1AC8734:                            ; CODE XREF: R5__Experiments__CheckAndBootstrapAnybrainAB+2E5↑j
+.text:0000000001AC8734 48 8D 56 F0                    lea     rdx, [rsi-10h]
+.text:0000000001AC8738 41 8B C5                       mov     eax, r13d
+.text:0000000001AC873B F0 0F C1 42 08                 lock xadd [rdx+8], eax
+.text:0000000001AC8740 83 F8 01                       cmp     eax, 1
+.text:0000000001AC8743 75 09                          jnz     short loc_1AC874E
+.text:0000000001AC8745 48 8B 02                       mov     rax, [rdx]
+.text:0000000001AC8748 48 8B C8                       mov     rcx, rax
+.text:0000000001AC874B                
+.text:0000000001AC874B FF 50 08                       call    qword ptr [rax+8]
+</pre></div>
+
+
+<p class="wp-block-paragraph">Let’s take a look what path it actually took during a real session of Apex Legends today:</p>
+
+
+<div class="wp-block-syntaxhighlighter-code "><pre class="brush: plain; title: ; notranslate">
+; string comparision loops starts to happen...
+[40.3] [MSG] [Slot] (282) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac8721, AccessType:X
+[40.3] [MSG] [Slot] (283) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac8723, AccessType:X
+[40.3] [MSG] [Slot] (284) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac8725, AccessType:X
+[40.3] [MSG] [Slot] (285) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac872a, AccessType:X
+[40.3] [MSG] [Slot] (286) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac872d, AccessType:X
+[40.3] [MSG] [Slot] (287) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac8730, AccessType:X
+[40.3] [MSG] [Slot] (288) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac8732, AccessType:X
+[40.3] [MSG] [Slot] (289) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac8721, AccessType:X
+[40.3] [MSG] [Slot] (290) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac8723, AccessType:X
+[40.3] [MSG] [Slot] (291) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac8725, AccessType:X
+[40.3] [MSG] [Slot] (292) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac872a, AccessType:X
+[40.3] [MSG] [Slot] (293) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac872d, AccessType:X
+[40.3] [MSG] [Slot] (294) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac8730, AccessType:X
+[40.3] [MSG] [Slot] (295) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac8732, AccessType:X
+
+
+; destination of the jump to on-failure branch (anybrain will not be enabled)
+[40.3] [MSG] [Slot] (303) PID:10232, TID:23256, RIP:r5apex_dx12.exe+0x1ac8734, AccessType:X
+</pre></div>
+
+
+<p class="wp-block-paragraph">As you can see, the string compare did in fact execute 😀 If you’re wondering where 0x1ac8734 leads to: It basically is located at the epilogue of the function, and it jumps there inside the EXPERIMENT_ONGOING string compare with the current experiment status. </p>
+
+
+
+<p class="wp-block-paragraph">This is usually happening when they havent toggled the experiment as ongoing/active yet, i.e the experiment status is NOT of value “EXPERIMENT_ONGOING”. I was additionally able to observe the functions responsible for doing the POST request to fetch experiments from the server, and also the function that sends the currently active experiments from client to server, actually execute.</p>
+
+
+<div class="wp-block-syntaxhighlighter-code "><pre class="brush: plain; title: ; notranslate">
+// around ~0x1AC8721
+while (v26 != 0) {
+  v26 = v27[(char *)v22 - "XPERIMENT_ONGOING" + 1];
+  v28 = *v27++;
+  if (v28 != v26) goto LABEL_52;  // &amp;lt;---  this branch was taken on my machine.
+}
+
+// around ~0x1ac8734
+else {
+LABEL_52:
+  if (_InterlockedExchangeAdd(v22 - 2, 0xFFFFFFFF) == 1)
+    (*(void(__fastcall **)(_QWORD))(*((_QWORD *)v22 - 2) + 8LL))(
+        a1
+        : *((_QWORD *)v22 - 2));
+  if (_InterlockedExchangeAdd(v16 - 2, 0xFFFFFFFF) == 1)
+    (*(void(__fastcall **)(_QWORD))(*((_QWORD *)v16 - 2) + 8LL))(
+        a1
+        : *((_QWORD *)v16 - 2));
+}
+v13 = v60 + 1;
+++v72;
+++v60;
+if (v72 &gt;= v73) goto LABEL_128;
+}
+v59 = 0;
+}
+else {
+LABEL_128:
+  v59 = 1;
+}
+ReleaseSRWLockExclusive(SRWLock : &amp;amp;stru_5C49AB0);
+return v59;
+}
+</pre></div>
+
+
+<p class="wp-block-paragraph">This means that respawn could really just flip a switch and if anybrain is really that sophisticated, it would make a lot of aim related cheats obsolete. Especially if they handle cases where somebody just manipulates this input telemetry system, i.e to not send out any data, or send out some kind of normalized fake data that avoids tripping it. They could use multiple approaches to harden it further, and it would quickly turn out to be annoying as hell.</p>
+
+
+
+<p class="wp-block-paragraph">If you want to take a look at some unfinished work, check out <a href="https://git.drof.space/drof/apex-anybrain-integration-re">this </a>git repository of mine. It’s still a work in progress and just intended to greate an incomplete map of their stuff, so that further work becomes easier. </p>
+
+
+
+<div aria-hidden="true" class="wp-block-spacer"></div>
+
+
+
+<h2 class="wp-block-heading">Conclusion</h2>
+
+
+
+<p class="wp-block-paragraph">As you can see, there is quite a lot of work to do for me. I’m currently playing with 0.7 Aim Assist override, on a controller. <s>So far, i have not been hammered</s>. But this means very little nowadays because now we’re righting multiple systems that theoretically should reinforce each other independently. Still, i really enjoy playing Apex and being back to playing it is very exciting. I must say that for now, i’m staying away from the maintenance of invasive multihacks and larger cheat projects. Playing without walls is pretty rough at times, but its also much more fun in its own way.</p>
+
+
+
+<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube wp-embed-aspect-16-9 wp-has-aspect-ratio"><div class="wp-block-embed__wrapper">
+
+</div></figure>
+
+
+
+<p class="wp-block-paragraph"><strong>Update 2026/10/2</strong>6: My account just got clapped so this will be my first ban on their new AC. Reached level 23 and ~600 kills in mixtape. Account was created on <strong>2026/10/15</strong>. I haven’t used any wallhacks and also haven’t done anything obvious like spam memory access externally. My approach was modifying the game’s own gamepad aim assistance feature. I enabled target compensation on mouse and keyboard, and also removed restrictions for certain weapons, like grenades. The aim assist force was modified to be roughly 0.8 (80%). Just for the reference: aim assist in Apex used to be 0.4 on PC, and 0.6 on Console.</p>
+
+
+
+<p class="wp-block-paragraph">Since our previous dive into Anybrain has suggested that its in a dormant state, i would guess that i was banned either based on client-side detection thresholds being reached or possibly a combination of that and high accuracy. I didn’t get many high kill games, but since i had no ESP, i was relying on w keying everything and just forcing gun fights wherever i can. This would lead to a lot of situations where i one clipped multiple people back to back. Keep in mind that in my last 5 days of play before being banned, i also enabled aim assist while not playing on an actual controller, and at times i even had my roller unplugged because i just made it so that the game thinks im on controller when it runs the aim assist check.</p>
+
+
+<div class="wp-block-syntaxhighlighter-code "><pre class="brush: plain; title: ; notranslate">
+{"name":"stats.kills_any_mode","value":"611"}
+{"name":"stats.kills_or_assists_any_mode","value":"996"}
+{"name":"stats.damage_done_any_mode","value":"126228"}
+{"name":"stats.npp_damage_done_any_mode","value":"126228"}
+{"name":"stats.weapon_damage_done_any_mode","value":"125958"}
+
+{"Event_Type":"accountChangeLog","Account_Change":"[endDate=2094-10-09T17:42Z(null)&amp;amp;reasons=null(null)&amp;amp;readOnly=null(false)&amp;amp;comments=null(null)]","Timestamp":"2026-10-26T17:42:42.626Z","Event_Status":"SUCCEEDED"}
+</pre></div>
+
+
+<p class="wp-block-paragraph">And i would try to compensate for my loss of information advantage due to the lack of ESP by simply outputting high damage numbers using the aim assist. This made my efficiency much worse because i have 10k hours of gameplay with ESP, but practically 0 hours of gameplay without it. So you simply lack the intuition and standard prediction and game sense that legit people posess.</p>
+
+
+
+<p class="wp-block-paragraph">We will never know why i was banned but i’ll say it was most likely warranted. Another possibility could be that since i didn’t continuously monitor the experiment fetcher for Anybrain, it could have just flipped to active state and possibly have landed on the activation treatment group if i was very unlucky. But i personally don’t think this is very likely, as the master switch for the experiment was disabled during my tests. So in order for this scenario to become likely, they would’ve had to flip the master switch IN ADDITION to me having to fall into the target activation group.</p>
+
+
+
+<p class="wp-block-paragraph">My approach was also more of an analysis environment than a stealth cheat, and i did a lot of silly shit like debugging stuff within the game, fixing up the standard functions like MmCopyVirtualMemory to work despite EA Javelin’s fake DTB, and then using that to just read and write stuff for just messing around. If i were to continue this in a sustainable way, i would have to switch some things up and invest some time into further reversal of their new stuff.</p>
+
+
+
+<p class="wp-block-paragraph">I’m currently not interested enough in that and kind of feel like it would be a lot of work to sustain something worthwhile, like an internal cheat. And should they actually go forward with their anybrain implementation and enable it, it would become even more pointless in my opinion. I might keep Apex as something i occasionally visit and play whenever there is something worth investigating, and something that is realistic with my current time budget and capability. </p>
+
+
+
+<p class="wp-block-paragraph">Also, being banned sucks especially if you cant even last more than a couple weeks. I think the real thrill in this comes when you can be blatant but still have a stacked account. But yeah, either i have regressed or times might have changed. Who knows…</p>
+
+
+
+<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube wp-embed-aspect-16-9 wp-has-aspect-ratio"><div class="wp-block-embed__wrapper">
+
+</div></figure>
+
+
+
+<figure class="wp-block-embed is-type-video is-provider-youtube wp-block-embed-youtube wp-embed-aspect-16-9 wp-has-aspect-ratio"><div class="wp-block-embed__wrapper">
+
+</div></figure>
+
+
+
+<div aria-hidden="true" class="wp-block-spacer"></div>

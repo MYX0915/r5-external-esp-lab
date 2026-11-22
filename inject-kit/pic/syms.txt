@@ -1,0 +1,1 @@
+text sym .drectve = 0x0
