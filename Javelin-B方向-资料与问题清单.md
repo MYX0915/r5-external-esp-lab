@@ -2915,3 +2915,57 @@ EAC 現有緩解: 對隱藏 PE image 的實體內存掃描；但完全清除 PE 
 对我们的实践含义：
 - **软件层面永远有残余风险**，本项目的定位应是研究/学习而非长期隐蔽运行
 - 已知的最大暴露点是 overlay 窗口特征，而非内存读取路径
+
+---
+
+## 83. DROF 文章精读：Javelin 的关键手段（2026-11-24）
+
+来源：`blog.drof.space/2026/10/17/apex-taking-a-look-at-recent-events/`（2026-10-17，11-04 更新）
+原文由用户直接提供全文（站点有 Cloudflare，脚本抓取均 403）。
+
+### 83.1 ★ 最关键：EA hook 的是 `MmCopyMemory`，不是 `MmCopyVirtualMemory`
+
+```
+ntoskrnl.exe!MmCopyMemory
+Original: 48 89 5C 24 20 55 56 57 41 54 41 55   (mov [rsp+20],rbx; push rbp/rsi/rdi/r12/r13)
+Patched:  48 B8 <eaanticheat+0x335390> FF E0   (mov rax,addr; jmp rax)
+```
+- 写入者：`eaanticheat.sys` 内的一个通用 memmove 类函数（patch 与 restore 都走它）
+- 持续时间：实测 **<10 秒，多数约 6 秒**
+- hook handler（`eaanticheat.sys+0x1717CFE`）能拿到：调用者参数 + **返回地址**
+- 第二个 handler 位于 `.grfn1`（匈牙利 packer 段，虚拟机化），作者的读取结果是全零，无法进一步分析
+- **副作用**：这个 hook 触发过 **PatchGuard (KPP) 蓝屏**，arg4=1（modification of a function or .pdata），arg3 正好指向被改的 `MmCopyMemory`
+
+**对我们的直接意义**：
+我们驱动调用的是 `MmCopyVirtualMemory`（不同函数），不在这条 hook 的覆盖范围内。
+这解释了为什么我们的读取一直稳定工作。**绝对不要为了任何理由改用 `MmCopyMemory`。**
+
+### 83.2 Javelin 的其他要点
+
+| 项目 | 原文结论 | 对项目的影响 |
+|---|---|---|
+| 平台安全要求 | 目前**不强制** Secure Boot / TPM 2.0 / HVCI(VBS)，最低 OS 版本也未变 | 门槛低，可继续 |
+| 地址空间保护 | 「haven't had any trouble with Javelin's address space protections… behave differently compared to EAC，but you can overcome it quite easily」 | 存在 **fake DTB**；我们已绕过（驱动工作正常） |
+| R5AC | 仍在游戏进程内做启发式检测（in-house solution） | ESP 类行为的主要风险来自这里，而非 Javelin 内核 |
+| Theia | Apex 似乎**已不再**对冷代码页做动态加密 | 与我们的 `.text` dump 一致（无加密页） |
+| Anybrain | 输入遥测，protobuf（`.rdata` 可见 `anybrain.proto` 等字符串），由 A/B 实验 `8-1-anyb-rollout` 控制，落到 `treatment-a` 才启用 ConVar `raw_input_client_send_enable` | 目前**休眠**；针对瞄准/AI 行为分析，对纯 ESP 影响较低 |
+| 作者的封号 | 改瞄准辅助（mouse+kb 上开 target compensation、解除武器限制、strength 0.8），**明确说明没有用 wallhack、没有频繁内存读取** | 说明封号归因于瞄准行为，不是 ESP |
+
+### 83.3 作者给出的对抗思路（针对 `MmCopyMemory` hook）
+
+```
+自建 wrapper：在本地复刻 MmCopyMemory 的已知良好序言（MOV/PUSH 那 12 字节），
+执行完后直接 jmp 到 ntoskrnl.MmCopyMemory + <跳过被 patch 的字节数>，
+这样 EA 的 inline hook 完全不会被触发。
+```
+我们不需要这条——因为根本不调用该 API。
+
+### 83.4 本项目据此的行动项
+
+```
+1. 保持 MmCopyVirtualMemory，禁止使用 MmCopyMemory（已满足）
+2. 不必担心 PatchGuard：我们没有在 ntoskrnl 上做任何 patch
+3. 主要残余风险：R5AC 的进程内启发式 + overlay 窗口特征（见第 81/82 节）
+4. Anybrain 若转为 EXPERIMENT_ONGOING 且命中 treatment-a，输入遥测会启用；
+   纯 ESP（不注入输入、不改瞄准）受影响面较小
+```

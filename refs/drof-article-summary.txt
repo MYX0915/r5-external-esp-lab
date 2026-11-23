@@ -1,0 +1,25 @@
+﻿DROF 文章关键结论摘要（blog.drof.space 2026-10-17，11-04 更新）
+
+★ EA hook 目标 = ntoskrnl!MmCopyMemory（不是 MmCopyVirtualMemory）
+   Original: 48 89 5C 24 20 55 56 57 41 54 41 55
+   Patched : 48 B8 <eaanticheat+0x335390> FF E0   (mov rax,addr; jmp rax)
+   - 由 eaanticheat.sys 内 memmove 类函数周期改写，持续 <10s（多数约 6s）后恢复
+   - handler: eaanticheat.sys+0x1717CFE，可读取调用者参数与返回地址
+   - 第二 handler 在 .grfn1（匈牙利 packer 段），静态读取为全零（虚拟化）
+   - 曾触发 PatchGuard 蓝屏：arg4=1 (modification of function/.pdata)，arg3 指向被改地址
+
+Javelin 其他:
+   - 不强制 Secure Boot / TPM 2.0 / HVCI
+   - 地址空间保护（fake DTB）：作者称"不难克服"，与原 EAC 实现相关经验可迁移
+   - R5AC 仍在进程内做启发式检测
+   - Theia 冷页动态加密似乎已停用
+
+Anybrain（输入遥测）:
+   - protobuf，.rdata 可见 anybrain.proto / PlayerData / InputData / MouseInput 等
+   - 由 A/B 实验 "8-1-anyb-rollout" 控制；treatment-a 才置 ConVar raw_input_client_send_enable
+   - 相关函数: R5::InputTelemetry::DrainQueue / SendPlayerInputTelemetry2 /
+              R5AC::CollectInputTelemetryAndSend（含 HID VID/PID 枚举）
+   - 目前休眠状态
+
+作者封号: 改瞄准辅助（strength 0.8, kb+m 开 target compensation），
+         明确未使用 wallhack、未频繁读取内存
