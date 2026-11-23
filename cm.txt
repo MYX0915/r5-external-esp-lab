@@ -1,0 +1,24 @@
+补充参考：两个仓库的 Glow 写入序列完整对照
+
+xTeJk/External-Apex-Tool (main) main.cpp:
+  Entity+GLOW_CONTEXT(0x3C8) = 1
+  Entity+GLOW_VISIBLE_TYPE(0x3D0) = 2
+  Entity+GLOW_TYPE(0x2C4) = GlowMode{101,101,100,100}
+      GlowMode = 4 x int8: GeneralGlowMode/BorderGlowMode/BorderSize/TransparentLevel
+  Entity+GLOW_COLOR(0x1D0/1D4/1D8) = RGB
+
+memcpyy/R5Apex-UserMode (master) Players.hpp:
+  Entity+0x480 = true
+  Entity+0x2C4 = 1
+  Entity+0x1D0/1D4/1D8 = RGB
+  Entity+0x2B0..0x2C8 与 0x2DC = FLT_MAX
+
+对照:
+  颜色 0x1D0/1D4/1D8 —— 两份完全一致（最可信）
+  GlowMode 0x2C4    —— 两份一致
+  启用写法不同: 0x480 bool vs 0x3D0=2
+  上下文 0x3C8=1    —— 仅 xTeJk
+
+其他:
+  xTeJk README 注明 glow 作者 AdrianVPL；驱动已被检测
+  memcpyy 用 Entity+0x500 -> ReadString 取类名识别对象
