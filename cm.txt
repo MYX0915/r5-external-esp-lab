@@ -1,24 +1,29 @@
-补充参考：两个仓库的 Glow 写入序列完整对照
+描边最后一块：定向差分法 + 本次工具问题记录
 
-xTeJk/External-Apex-Tool (main) main.cpp:
-  Entity+GLOW_CONTEXT(0x3C8) = 1
-  Entity+GLOW_VISIBLE_TYPE(0x3D0) = 2
-  Entity+GLOW_TYPE(0x2C4) = GlowMode{101,101,100,100}
-      GlowMode = 4 x int8: GeneralGlowMode/BorderGlowMode/BorderSize/TransparentLevel
-  Entity+GLOW_COLOR(0x1D0/1D4/1D8) = RGB
+用户观察: 走到训练场机器人面前，机器人会闪红光 —— 游戏自身在写高亮字段
 
-memcpyy/R5Apex-UserMode (master) Players.hpp:
-  Entity+0x480 = true
-  Entity+0x2C4 = 1
-  Entity+0x1D0/1D4/1D8 = RGB
-  Entity+0x2B0..0x2C8 与 0x2DC = FLT_MAX
+方法对比:
+  全量差分 926 实体 × 2 轮 → 每轮 80s，闪光只持续数秒，不可行
+  定向差分 开扫描只高亮 3 人 → 6 个请求约 1.5s，完全可行
 
-对照:
-  颜色 0x1D0/1D4/1D8 —— 两份完全一致（最可信）
-  GlowMode 0x2C4    —— 两份一致
-  启用写法不同: 0x480 bool vs 0x3D0=2
-  上下文 0x3C8=1    —— 仅 xTeJk
+推荐流程:
+  1. dump 尺寸 >= 0x1000（+0x978 在 2424 字节处）
+  2. ent <玩家类vtable> 取实例地址
+  3. 站远 dump A → 靠近触发 → dump B
+  4. 差分找字段 → w 命令验证
 
-其他:
-  xTeJk README 注明 glow 作者 AdrianVPL；驱动已被检测
-  memcpyy 用 Entity+0x500 -> ReadString 取类名识别对象
+工具问题:
+  ✅ 已修 自动重连后 modBaseForNpc 未同步导致 cls/ent 失效
+  ✅ 已加 wl 命令导出可见实体地址
+  ❌ 待修 单条请求会被丢；多条打包进一次请求可全部执行
+  ⚠️ 统一使用 0x1000 dump 尺寸
+
+写入能力实测:
+  w 命令工作正常（status=0x0）
+  旧偏移 +0x1D0/+0x2C4/+0x480 写入后被立即还原
+  +0x3C8 写入可保持
+  +0x298 在假人上全 0、玩家上非指针
+  +0x500 类名指针在本版本为 0
+  → 旧外挂布局整体失效，本版本已重构为上下文表体系
+
+文档新增第 87 节

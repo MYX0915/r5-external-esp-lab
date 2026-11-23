@@ -15,10 +15,14 @@ static float g_entList[FEED_MAX_ENT][3];
 static CHAR* AppendFmt(CHAR* p, CHAR* end, const CHAR* fmt, ...);
 
 
+
 #define LOG_FILE L"\\??\\C:\\ProgramData\\kmaplog.txt"
 #define OUT_DIR  L"\\??\\C:\\ProgramData\\scdump\\"
 
 typedef unsigned __int64 U64;
+
+static U64   g_entAddr[64];
+static ULONG g_entAddrCount = 0;
 
 NTSYSAPI NTSTATUS NTAPI ZwQuerySystemInformation(ULONG, PVOID, ULONG, PULONG);
 NTSYSAPI NTSTATUS NTAPI ZwQueryVirtualMemory(HANDLE, PVOID, ULONG, PVOID, SIZE_T, PSIZE_T);
@@ -507,6 +511,21 @@ static VOID SigScan(PEPROCESS proc, U64 arrVa, PUCHAR buf, ULONG reqId)
     ExFreePoolWithTag(txt, 'sigt');
 }
 
+static VOID WriteEntAddrList(void)
+{
+    CHAR* txt = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x4000, 'wltx');
+    CHAR* w;
+    ULONG i;
+    if (!txt) return;
+    RtlZeroMemory(txt, 0x4000);
+    w = txt; w[0] = 0;
+    for (i = 0; i < g_entAddrCount && i < 64; i++)
+        w = AppendFmt(w, txt + 0x4000, "0x%llX\n", g_entAddr[i]);
+    WriteFileAt(L"\\??\\C:\\ProgramData\\sc_addr.txt", txt, (ULONG)(w - txt) + 1);
+    KF("[mdump] wl done count=%lu\n", g_entAddrCount);
+    ExFreePoolWithTag(txt, 'wltx');
+}
+
 static VOID ClassPass(PEPROCESS proc, U64 arrVa, PUCHAR buf, U64 wantVt, BOOLEAN census);
 static VOID SigScan(PEPROCESS proc, U64 arrVa, PUCHAR buf, ULONG reqId);
 static VOID DumpBones(PEPROCESS proc, U64 inst, PUCHAR buf);
@@ -538,7 +557,10 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                     UCHAR* le = p;
                     while (le < end && *le != '\r' && *le != '\n') le++;
                     if (le > p) {
-                        if ((p[0] == 'w' || p[0] == 'W') && p[1] == ' ') {
+                        if ((p[0] == 'w' || p[0] == 'W') && (p[1] == 'l' || p[1] == 'L')) {
+                            WriteEntAddrList();
+                        }
+                        else if ((p[0] == 'w' || p[0] == 'W') && p[1] == ' ') {
                             WriteVa(proc, p, le);
                         }
                         else if ((p[0] == 'p' || p[0] == 'P') && p[1] == ' ') {
@@ -901,8 +923,6 @@ static ULONG ScanWorldPos(PEPROCESS proc, U64 arrVa, const float cam[3], float o
 }
 
 /* cached entity addresses: rebuilt occasionally, positions refreshed every tick */
-static U64   g_entAddr[64];
-static ULONG g_entAddrCount = 0;
 
 static VOID RebuildEntAddrs(PEPROCESS proc, U64 arrVa, const float cam[3], U64 wantVt)
 {
