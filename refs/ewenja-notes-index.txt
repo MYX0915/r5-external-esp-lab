@@ -1,0 +1,31 @@
+﻿ewenja/eac-kernel-analysis 文件清单 (2026-11-24 via jsdelivr):
+/apex_dump.md                      13948   CApexDumpWasm 工具笔记
+/CHANGELOG.md                       6913
+/crypto_and_obfuscation.md         10785
+/detection_methods.md              12354
+/ea-javelin-anticheat/apex_migration_zh_tw.md     3797
+/ea-javelin-anticheat/eac_vs_javelin_zh_tw.md     7295
+/ea-javelin-anticheat/javelin_analysis_zh_tw.md  15489
+/ea-javelin-anticheat/README.md                   3780
+/eac_beginner_report_zh_tw.md       9366
+/eac_tiers_and_community_signal_zh_tw.md  10683
+/eos_driver_analysis_zh_tw.md      29553
+/eos_sys_2026_05_static_revalidation.md  104730
+/external_cheat_detection.md       12204  ★ 外部检测面
+/external_cheat_detection 关键结论:
+  - Handle 检测: PROCESS_VM_READ(0x10)/WRITE(0x20)/OPERATION(0x8) → 立即标记
+  - Overlay: WS_EX_TOPMOST|TRANSPARENT|LAYERED (+TOOLWINDOW) 组合 = 经典 ESP 签名
+  - DWM: DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS) 找与游戏重合的窗口
+  - 驱动黑名单: aBin/aBin_0, 覆盖 physical-memory mapper / MmCopyMemory wrapper /
+    CR3 mapper / SSDT patcher
+  - 缺口1: kernel EPROCESS + MmCopyMemory 不开 handle → 扫描不到（我们当前路线）
+  - 缺口5: 进程名冒充可以被路径+签名校验识破
+/function_map.md                   16869
+/internal_cheats_and_injectors.md  17614
+/ioctl_and_driver_tracking.md      10146
+/spoofer_detection.md              12050
+/startup_runtime_analysis.md       10214
+/telemetry.md                      12975
+/usermode_eac_app.md               16398
+/usermode_techniques.md            17755
+/vulnerabilities_and_gaps.md       15860

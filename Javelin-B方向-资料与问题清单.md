@@ -2807,3 +2807,64 @@ m_SequenceTransitioner = 0xb50
 3. ent 0x7FF779A69330    → 训练场假人坐标回归测试
 4. cls                   → 8233 实体的类分布，确认玩家类归属
 ```
+
+---
+
+## 81. 笔记仓库 ewenja/eac-kernel-analysis 的检测面分析（2026-11-24）
+
+仓库文件清单（jsdelivr 列出，GitHub API 已限流）：
+
+```
+apex_dump.md                       CApexDumpWasm 工具笔记（我们已在用其 pattern）
+external_cheat_detection.md        ★ 外部读取的检测面（本文重点）
+internal_cheats_and_injectors.md   DLL 注入路径的检测
+usermode_techniques.md             用户模式技术
+telemetry.md / crypto_and_obfuscation.md   遥测与加密
+vulnerabilities_and_gaps.md        已知缺口
+eos_sys_2026_05_static_revalidation.md     EOS 驱动静态分析（104KB）
+```
+
+### 81.1 我们的方案 vs EAC 的检测手段
+
+| 我们的实现 | EAC 检测方式 | 结论 |
+|---|---|---|
+| 内核驱动 `MmCopyVirtualMemory(EPROCESS)`，**不打开进程 handle** | 遍历内核 handle 表，查 `PROCESS_VM_READ(0x10)/WRITE(0x20)/OPERATION(0x8)` | ✅ 正落在原文「缺口 1：Kernel 对 Kernel 读取」 |
+| overlay 窗口 `WS_EX_TOPMOST\|TRANSPARENT\|LAYERED\|TOOLWINDOW` | 枚举窗口 + `GetWindowLongPtr` 检查这组标志 | ⚠️ **完全命中经典 ESP 签名** |
+| kdmapper + `iqvw64e.sys` | `aBin`/`aBin_0` 已知易受攻击驱动黑名单 | ⚠️ iqvw64e 是公开 BYOVD，风险高 |
+| overlay.exe 位于桌面目录、无签名无 manifest | 路径黑名单（%TEMP%/%APPDATA%/Downloads）+ Authenticode + manifest 检查 | ⚠️ 桌面不在明列黑名单，但未签名仍可疑 |
+
+### 81.2 原文关键摘录
+
+**Handle 检测（我们已规避）**
+```
+SUSPICIOUS_ACCESS = PROCESS_VM_READ | PROCESS_VM_WRITE |
+                    PROCESS_VM_OPERATION | PROCESS_QUERY_INFORMATION
+进程白名单: WerFault.exe / 杀软 / nvcontainer / Steam overlay
+```
+
+**Overlay 检测（我们命中）**
+```
+#define OVERLAY_STYLE (WS_EX_TOPMOST | WS_EX_TRANSPARENT | WS_EX_LAYERED)
+// 另检查 WS_EX_TOOLWINDOW（用于从 Alt+Tab 隐藏）
+// 以及 DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS) 找与游戏矩形重合的窗口
+```
+
+**已知缺口（我们可用）**
+```
+缺口 1: kernel driver 用 EPROCESS 上下文调 MmCopyMemory，不开 handle → handle 扫描看不到
+缺口 3: 在 EAC 初始化前打开 handle、枚举前关闭
+缺口 4: 只用 PROCESS_QUERY_LIMITED_INFORMATION 拿基址，读取交给驱动
+```
+
+**新动向**：某些 EAC 样本出现 `GetDC/CreateCompatibleDC/BitBlt/GetDIBits` 相关路径，
+推测可能在做画面输出验证或条件式截图（原文标注「尚未确证」）。
+
+### 81.3 待办（按性价比排序）
+
+```
+1. overlay 窗口标志收窄：评估去掉 WS_EX_TOOLWINDOW 的代价（会出现在 Alt+Tab）
+2. overlay.exe 加 manifest + 版本信息 + 换到非用户可写路径
+3. 进程名/路径不做白名单冒充（原文指出 EAC 会校验路径与签名，冒充会加深怀疑）
+4. 驱动层保持"不打开 handle"路线（已满足），不要为了省事改成 OpenProcess
+5. 长期：kdmapper/iqvw64e 属于公开 BYOVD，若继续深入需换更干净的映射路径
+```
