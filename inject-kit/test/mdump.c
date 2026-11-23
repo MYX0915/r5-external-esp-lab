@@ -23,6 +23,7 @@ typedef unsigned __int64 U64;
 
 static U64   g_entAddr[64];
 static ULONG g_entAddrCount = 0;
+static ULONG g_espMode = 1;   /* 0=????? vtable?  1=???? */
 
 NTSYSAPI NTSTATUS NTAPI ZwQuerySystemInformation(ULONG, PVOID, ULONG, PULONG);
 NTSYSAPI NTSTATUS NTAPI ZwQueryVirtualMemory(HANDLE, PVOID, ULONG, PVOID, SIZE_T, PSIZE_T);
@@ -557,7 +558,18 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                     UCHAR* le = p;
                     while (le < end && *le != '\r' && *le != '\n') le++;
                     if (le > p) {
-                        if ((p[0] == 'w' || p[0] == 'W') && (p[1] == 'l' || p[1] == 'L')) {
+                        if ((p[0] == 'm' || p[0] == 'M') && (p[1] == 'o' || p[1] == 'O') && (p[2] == 'd' || p[2] == 'D')) {
+                            UCHAR* q3 = p + 4;
+                            ULONG nv = 0, seen = 0;
+                            while (q3 < le) {
+                                if (*q3 >= '0' && *q3 <= '9') { nv = nv * 10 + (*q3 - '0'); seen = 1; }
+                                else if (seen) break;
+                                q3++;
+                            }
+                            if (seen) { g_espMode = (nv == 0) ? 0 : 1; }
+                            KF("[mdump] mode=%lu (0=players 1=all)\n", g_espMode);
+                        }
+                        else if ((p[0] == 'w' || p[0] == 'W') && (p[1] == 'l' || p[1] == 'L')) {
                             WriteEntAddrList();
                         }
                         else if ((p[0] == 'w' || p[0] == 'W') && p[1] == ' ') {
@@ -942,7 +954,7 @@ static VOID RebuildEntAddrs(PEPROCESS proc, U64 arrVa, const float cam[3], U64 w
             float dx, dy, dz, d2;
             U64 vt = 0;
             if (!inst || inst < 0x10000 || (inst >> 47)) continue;
-            if (wantVt) {
+            if (wantVt && g_espMode == 0) {
                 if (!NT_SUCCESS(MemRead(proc, inst, &vt, 8)) || vt != wantVt) continue;
             }
             if (!NT_SUCCESS(MemRead(proc, inst + 0x978, p, 12))) continue;
