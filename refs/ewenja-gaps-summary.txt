@@ -1,0 +1,34 @@
+﻿vulnerabilities_and_gaps.md 关键条目摘要 (ewenja/eac-kernel-analysis)
+
+[嚴重] GAP-EXT-01 DMA 硬體攻擊 — 軟體層無解
+[嚴重] GAP-EXT-02 Driver 層 MmCopyMemory（不開 handle）★ 我們走的路線
+          緩解: 對隱藏 PE image 的實體內存掃描；擦除 PE header 可逃避
+[高]   GAP-EXT-03 EAC 初始化前預開 handle
+[高]   GAP-EXT-04 Process 名稱白名單繞過（路徑+簽名校驗可識破）
+[中]   GAP-EXT-05 只用 QUERY_LIMITED_INFORMATION 拿基址
+
+[嚴重] GAP-INJ-01 VAD 節點 DKOM（極高難度，失誤即 BSOD）
+[高]   GAP-INJ-02 早期注入窗口
+[高]   GAP-INJ-03 Thread Pool 執行劫持
+[高]   GAP-INJ-04 APC 注入執行後
+[中]   GAP-INJ-05 已簽名 DLL ROP 鏈
+[中]   GAP-INJ-06 Section 物件替換
+
+[嚴重] GAP-SPF-01 DMA 韌體重燒
+[高]   GAP-SPF-02 Hypervisor 模擬 SMBIOS
+[高]   GAP-SPF-03 GPU PnP 實例 ID 未交叉驗證
+[中]   GAP-SPF-04 NDIS PERMANENT_ADDRESS
+[中]   GAP-SPF-05 Volume GUID Registry
+
+[嚴重] GAP-UM-01 Ring3 反除錯可繞（ScyllaHide）
+[高]   GAP-UM-02 heartbeat ~5s 窗口
+[高]   GAP-UM-03 EnumWindows 可被 hook → 隱藏 overlay ★
+[中]   GAP-UM-04 透過除錯分析 IOCTL 協定
+
+[高]   GAP-KRN-01 PatchGuard 定時窗口（3~10 分鐘）
+[高]   GAP-KRN-02 實體內存掃描覆蓋有限
+[中]   GAP-KRN-03 加密 API 常數每次建置固定
+[中]   GAP-KRN-04 callback table 可見（勿動，PatchGuard）
+
+[中]   GAP-CRY-01 Hypervisor 取 P-256 私鑰
+[中]   GAP-CRY-02 遙測重放（有時間戳校驗）

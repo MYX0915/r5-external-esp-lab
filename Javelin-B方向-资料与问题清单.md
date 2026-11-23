@@ -2868,3 +2868,50 @@ SUSPICIOUS_ACCESS = PROCESS_VM_READ | PROCESS_VM_WRITE |
 4. 驱动层保持"不打开 handle"路线（已满足），不要为了省事改成 OpenProcess
 5. 长期：kdmapper/iqvw64e 属于公开 BYOVD，若继续深入需换更干净的映射路径
 ```
+
+---
+
+## 82. EAC 缺口汇总（vulnerabilities_and_gaps.md）与我们方案的对应（2026-11-24）
+
+### 82.1 我们走的路线 = 文档标注的「嚴重」级缺口
+
+**GAP-EXT-02 [嚴重] Driver 層 Kernel 記憶體讀取（不需要 Process Handle）**
+```
+攻擊者可用 MmCopyMemory(targetProcess, ...) 讀任意 process 記憶體，不需要 process handle。
+EAC 為何漏掉:
+  - MmCopyMemory 不建立 handle 項目 → handle 掃描器什麼都找不到
+  - 若讀取器 driver 從 PsLoadedModuleList 移除（DKOM）→ 模組掃描器不可見
+EAC 現有緩解: 對隱藏 PE image 的實體內存掃描；但完全清除 PE header 的 driver 仍可逃避
+```
+**我们的实现完全符合**：`MmCopyVirtualMemory(EPROCESS)` + kdmapper（不进 PsLoadedModuleList、擦除 PE header）。
+→ 结论：**保持这条路线，不要改成 OpenProcess/ReadProcessMemory**。
+
+### 82.2 次优缺口（可考虑，代价较高）
+
+| 缺口 | 评级 | 内容 | 对我们的意义 |
+|---|---|---|---|
+| **GAP-UM-03** | 高 | EAC 的 overlay 检测走 `EnumWindows`（用户模式 callback），可被 hook | 是绕开「窗口标志组合」的唯一软件路径，但需在 EAC 进程内 hook，激进 |
+| GAP-UM-02 | 高 | heartbeart 约 5 秒一次，存在时序窗口 | 理论可用，实施复杂 |
+| GAP-KRN-02 | 高 | 实体内存扫描覆盖有限（主扫内核非分页池/驱动区段） | 我们的驱动若落在常规范围外风险略低 |
+| GAP-EXT-03 | 高 | EAC 初始化前预开 handle、读取后立即关闭 | 我们不开 handle，无需 |
+| GAP-EXT-05 | 中 | 只用 `PROCESS_QUERY_LIMITED_INFORMATION` 拿基址 | 我们连这个都不用（驱动直接读 PEB） |
+| GAP-KRN-04 | 中 | EAC 的 callback 注册在 callback table 中可见 | 不要碰，PatchGuard 会蓝屏 |
+
+### 82.3 明确不要做的事
+
+```
+1. 进程名冒充白名单（nvcontainer 等）—— EAC 交叉校验路径与 Authenticode 签名
+2. 修改 EAC 的 callback table —— PatchGuard 监控，蓝屏风险
+3. VAD 节点 DKOM —— 文档标注「極高」難度，操作失误立即 BSOD
+4. 给驱动留下完整 PE header —— 会被实体内存扫描命中
+```
+
+### 82.4 文档的整体判断（原文结论）
+
+> 能可靠逃避 EAC 的最复杂攻击链需要：自定义 Type-1 hypervisor + BYOVD 或硬件烧录 +
+> DMA 硬件 + 不使用 DKOM。这个组合的成本和复杂性正是 EAC 被认为较强的原因 ——
+> 全面击败它需要硬件层级的资源。
+
+对我们的实践含义：
+- **软件层面永远有残余风险**，本项目的定位应是研究/学习而非长期隐蔽运行
+- 已知的最大暴露点是 overlay 窗口特征，而非内存读取路径
