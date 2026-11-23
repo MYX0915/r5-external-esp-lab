@@ -1,0 +1,20 @@
+﻿找到可运行的 Glow 实现：memcpyy/R5Apex-UserMode
+
+绕过 GitHub API 限流，改用 raw.githubusercontent 直接取源码。
+
+HighlightEnable 完整写入序列（旧构建）:
+  Entity+0x480 = 1               glow_enable
+  Entity+0x2C4 = 1               glow_type
+  Entity+0x1D0/1D4/1D8 = R/G/B   glow_color
+  Entity+0x2B0..0x2C8 = FLT_MAX  参数块
+  Entity+0x2DC = FLT_MAX
+
+对象识别方式（不依赖 RTTI）:
+  Entity+0x500 -> 句柄 -> ReadString -> 类名字符串
+  直接解决本版本 RTTI 类名被混淆的问题
+
+跨来源印证:
+  glow_color = 0x1D0 在 memcpyy 与 xTeJk 两个仓库中一致
+  glow_type 0x2C0+4 = 0x2C4 与 xTeJk 的 GLOW_TYPE 一致
+
+refs/ 新增 memcpyy-glow-implementation.md
