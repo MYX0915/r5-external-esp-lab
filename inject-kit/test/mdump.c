@@ -511,6 +511,8 @@ static VOID ClassPass(PEPROCESS proc, U64 arrVa, PUCHAR buf, U64 wantVt, BOOLEAN
 static VOID SigScan(PEPROCESS proc, U64 arrVa, PUCHAR buf, ULONG reqId);
 static VOID DumpBones(PEPROCESS proc, U64 inst, PUCHAR buf);
 static NTSTATUS MemRead(PEPROCESS proc, U64 va, PVOID dst, SIZE_T len);
+static NTSTATUS MemWrite(PEPROCESS proc, U64 va, PVOID src, SIZE_T len);
+static VOID WriteVa(PEPROCESS proc, UCHAR* p, UCHAR* le);
 
 static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN)
 {
@@ -536,7 +538,10 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                     UCHAR* le = p;
                     while (le < end && *le != '\r' && *le != '\n') le++;
                     if (le > p) {
-                        if ((p[0] == 'p' || p[0] == 'P') && p[1] == ' ') {
+                        if ((p[0] == 'w' || p[0] == 'W') && p[1] == ' ') {
+                            WriteVa(proc, p, le);
+                        }
+                        else if ((p[0] == 'p' || p[0] == 'P') && p[1] == ' ') {
                             U64 va2 = 0;
                             UCHAR* q2 = p + 2;
                             while (q2 < le && *q2 == ' ') q2++;
@@ -551,7 +556,8 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                             if (va2) ProbeVa(proc, va2, buf);
                         }
                         else if ((p[0] == 'b' || p[0] == 'B') && (p[1] == 'o' || p[1] == 'O')) {
-                            U64 bi = 0; UCHAR* q4 = p + 2;
+                            U64 bi = 0; UCHAR* q4 = p;
+                            while (q4 < le && *q4 != ' ') q4++;
                             while (q4 < le && *q4 == ' ') q4++;
                             if (q4 + 1 < le && q4[0]=='0' && (q4[1]=='x'||q4[1]=='X')) q4 += 2;
                             while (q4 < le) { UCHAR c=*q4; U64 d;
@@ -568,7 +574,8 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                         }
                         else if ((p[0] == 'e' || p[0] == 'E') && (p[1] == 'n' || p[1] == 'N')) {
                             U64 want2 = 0;
-                            UCHAR* q3 = p + 2;
+                            UCHAR* q3 = p;
+                            while (q3 < le && *q3 != ' ') q3++;
                             while (q3 < le && *q3 == ' ') q3++;
                             if (q3 + 1 < le && q3[0] == '0' && (q3[1] == 'x' || q3[1] == 'X')) q3 += 2;
                             while (q3 < le) {
@@ -717,6 +724,51 @@ static NTSTATUS MemRead(PEPROCESS proc, U64 va, PVOID dst, SIZE_T len)
 }
 
 
+
+static NTSTATUS MemWrite(PEPROCESS proc, U64 va, PVOID src, SIZE_T len)
+{
+    SIZE_T done = 0;
+    return MmCopyVirtualMemory(PsGetCurrentProcess(), src, proc, (PVOID)(ULONG_PTR)va, len, KernelMode, &done);
+}
+
+static ULONG HexNib(UCHAR c)
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    if ((c | 0x20) >= 'a' && (c | 0x20) <= 'f') return (c | 0x20) - 'a' + 10;
+    return 0xFF;
+}
+
+/* w 0x<va> <hexbytes>   e.g.  w 0x1234ABCD 0102FF  */
+static VOID WriteVa(PEPROCESS proc, UCHAR* p, UCHAR* le)
+{
+    U64 va = 0;
+    UCHAR* q = p;
+    UCHAR bytes[64];
+    ULONG  n = 0, hi, lo;
+    NTSTATUS st;
+
+    while (q < le && *q != ' ') q++;
+    while (q < le && *q == ' ') q++;
+    if (q + 1 < le && q[0] == '0' && (q[1] == 'x' || q[1] == 'X')) q += 2;
+    while (q < le) {
+        UCHAR c = *q; U64 d;
+        if (c >= '0' && c <= '9') d = c - '0';
+        else if ((c | 0x20) >= 'a' && (c | 0x20) <= 'f') d = (c | 0x20) - 'a' + 10;
+        else break;
+        va = va * 16 + d; q++;
+    }
+    while (q < le && *q == ' ') q++;
+    while (q < le && n < sizeof(bytes)) {
+        hi = HexNib(*q); if (hi == 0xFF) break;
+        lo = (q + 1 < le) ? HexNib(q[1]) : 0xFF; if (lo == 0xFF) break;
+        bytes[n++] = (UCHAR)((hi << 4) | lo);
+        q += 2;
+    }
+    if (!va || !n) { K("[mdump] w: bad args\n"); return; }
+    st = MemWrite(proc, va, bytes, n);
+    KF("[mdump] w 0x%llX len=%lu status=0x%X\n", va, n, st);
+}
+
 static ULONG StartsWithStr(const char* hay, const char* needle)
 {
     return hay && needle && strncmp(hay, needle, strlen(needle)) == 0;
@@ -829,6 +881,7 @@ static ULONG ScanWorldPos(PEPROCESS proc, U64 arrVa, const float cam[3], float o
             U64 inst = *(U64*)(buf + k);
             float p[3];
             float dx, dy, dz, d2;
+            U64 vt = 0;
             if (!inst || inst < 0x10000 || (inst >> 47)) continue;
             if (!NT_SUCCESS(MemRead(proc, inst + 0x978, p, 12))) continue;
             if (p[0] != p[0] || p[1] != p[1] || p[2] != p[2]) continue;
@@ -851,7 +904,7 @@ static ULONG ScanWorldPos(PEPROCESS proc, U64 arrVa, const float cam[3], float o
 static U64   g_entAddr[64];
 static ULONG g_entAddrCount = 0;
 
-static VOID RebuildEntAddrs(PEPROCESS proc, U64 arrVa, const float cam[3])
+static VOID RebuildEntAddrs(PEPROCESS proc, U64 arrVa, const float cam[3], U64 wantVt)
 {
     PUCHAR buf = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x10000, 'rebA');
     ULONG found = 0;
@@ -867,7 +920,11 @@ static VOID RebuildEntAddrs(PEPROCESS proc, U64 arrVa, const float cam[3])
             U64 inst = *(U64*)(buf + k);
             float p[3];
             float dx, dy, dz, d2;
+            U64 vt = 0;
             if (!inst || inst < 0x10000 || (inst >> 47)) continue;
+            if (wantVt) {
+                if (!NT_SUCCESS(MemRead(proc, inst, &vt, 8)) || vt != wantVt) continue;
+            }
             if (!NT_SUCCESS(MemRead(proc, inst + 0x978, p, 12))) continue;
             if (p[0] != p[0] || p[1] != p[1] || p[2] != p[2]) continue;
             if (p[0] < -40000.0f || p[0] > 40000.0f) continue;
@@ -931,23 +988,74 @@ static ULONG ScanSameClass(PEPROCESS proc, U64 arrVa, U64 vt, U64 self, float ou
     return found;
 }
 
-static VOID EspLoop(PEPROCESS proc, U64 modBase);
 
+static U64 g_modBase = 0;
+
+static U64 ComputeModBase(PEPROCESS proc, PCWSTR name)
+{
+    U64 modBase = 0;
+    KAPC_STATE apc; PPEB peb;
+    KeStackAttachProcess(proc, &apc);
+    peb = (PPEB)PsGetProcessPeb(proc);
+    if (peb) {
+        PVOID ldr = *(PVOID*)((PUCHAR)peb + 0x18);
+        if (ldr) {
+            LIST_ENTRY* head = (LIST_ENTRY*)((PUCHAR)ldr + 0x10);
+            LIST_ENTRY* cur;
+            UNICODE_STRING want;
+            RtlInitUnicodeString(&want, name);
+            for (cur = head->Flink; cur != head && cur; cur = cur->Flink) {
+                PUCHAR e = (PUCHAR)cur; UNICODE_STRING bn;
+                bn.Length = *(USHORT*)(e + 0x58); bn.MaximumLength = bn.Length;
+                bn.Buffer = *(PWCH*)(e + 0x60);
+                if (bn.Buffer && bn.Length && RtlEqualUnicodeString(&bn, &want, TRUE)) {
+                    modBase = *(U64*)(e + 0x30); break;
+                }
+            }
+        }
+    }
+    KeUnstackDetachProcess(&apc);
+    return modBase;
+}
+
+/* ?????????????????????? */
+static BOOLEAN TryReattach(void)
+{
+    LARGE_INTEGER ct; ULONG pid; PEPROCESS np = NULL; U64 nb;
+    RtlZeroMemory(&ct, sizeof(ct));
+    pid = FindPid(L"r5apex_dx12.exe", &ct);
+    if (!pid) return FALSE;
+    if (!NT_SUCCESS(PsLookupProcessByProcessId((HANDLE)(ULONG_PTR)pid, &np))) return FALSE;
+    if (PsGetProcessExitStatus(np) != STATUS_PENDING) { ObDereferenceObject(np); return FALSE; }
+    nb = ComputeModBase(np, L"r5apex_dx12.exe");
+    if (!nb) { ObDereferenceObject(np); return FALSE; }
+    if (g_espProc) ObDereferenceObject(g_espProc);
+    g_espProc = np;
+    g_modBase = nb;
+    KF("[mdump] reattached pid=%lu base=0x%llX\n", pid, nb);
+    return TRUE;
+}
+
+static VOID EspLoop(PEPROCESS proc, U64 modBase);
 static VOID EspThread(PVOID ctx)
 {
     EspLoop(g_espProc, (U64)(ULONG_PTR)ctx);
     PsTerminateSystemThread(STATUS_SUCCESS);
 }
 
-static VOID EspLoop(PEPROCESS proc, U64 modBase)
+static VOID EspLoop(PEPROCESS proc0, U64 modBase0)
 {
+    PEPROCESS proc = proc0; U64 modBase = modBase0;
     FEED f;
     ULONG tick = 0;
 
     KF("[mdump] esp loop start, module=0x%llX\n", modBase);
     for (;;) {
         ULONG h = 0xFFFFFFFF;
-        if (!TGT_ALIVE()) { SleepMs(500); continue; }
+        if (!TGT_ALIVE()) {
+            if (TryReattach()) { proc = g_espProc; modBase = g_modBase; continue; }
+            SleepMs(1000); continue;
+        }
         RtlZeroMemory(&f, sizeof(f));
         f.Magic = 0x44454546;     /* 'FEED' */
         f.Version = 2;
@@ -970,8 +1078,11 @@ static VOID EspLoop(PEPROCESS proc, U64 modBase)
         }
         if (f.Ok) {
             static float s_ent[FEED_MAX_ENT][3];
-            if ((tick % 120) == 0)
-                RebuildEntAddrs(proc, modBase + RVA_ENTITY_ARRAY, f.Cam);
+            if ((tick % 120) == 0) {
+                U64 lvt = 0;
+                if (f.Inst) MemRead(proc, f.Inst, &lvt, 8);
+                RebuildEntAddrs(proc, modBase + RVA_ENTITY_ARRAY, f.Cam, lvt);
+            }
             g_entCount = RefreshEntPositions(proc, f.Cam, s_ent, FEED_MAX_ENT);
             RtlCopyMemory(g_entList, s_ent, sizeof(s_ent));
         }

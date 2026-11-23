@@ -1,24 +1,22 @@
-import numpy as np, glob, os, struct, math, time
-def read_feed(tries=30):
-    for _ in range(tries):
-        raw=open(r"C:\ProgramData\sc_feed.bin","rb").read()
-        if len(raw)>=68 and struct.unpack_from("<I",raw,64)[0]:
-            cam=np.array(struct.unpack_from("<3f",raw,8))
-            if np.isfinite(cam).all() and abs(cam).sum()>1: return cam
-        time.sleep(0.1)
-    return None
-cam=read_feed()
-print("cam=",["%.1f"%v for v in cam])
-for f in sorted(glob.glob(r"C:\ProgramData\scdump\13_*.bin"))[:6]:
-    if os.path.getsize(f)<0x1000: continue
-    a=np.fromfile(f,dtype=np.float32)
-    best=None
-    for i in range(0,len(a)-3,4):
-        v=a[i:i+3]
-        if not np.isfinite(v).all(): continue
-        if np.abs(v).max()>20000: continue
-        d=float(np.linalg.norm(v-cam))
-        if best is None or d<best[0]: best=(d,i*4,v.copy())
-    if best:
-        d,off,v=best
-        print("%-20s closest +0x%05X (%9.1f,%9.1f,%9.1f) dist=%.1f" % (os.path.basename(f),off,v[0],v[1],v[2],d))
+import struct, math
+f=open(r"C:\ProgramData\sc_feed.bin","rb").read()
+cam=struct.unpack_from("<3f",f,8); ang=struct.unpack_from("<3f",f,20)
+p=math.radians(ang[0]); y=math.radians(ang[1])
+fw=(math.cos(p)*math.cos(y), math.cos(p)*math.sin(y), -math.sin(p))
+print("cam=(%.1f,%.1f,%.1f)  ang=(%.2f,%.2f)" % (cam[0],cam[1],cam[2],ang[0],ang[1]))
+print("forward=(%.4f,%.4f,%.4f)\n" % fw)
+cnt=struct.unpack_from("<I",f,44)[0]
+rows=[]
+for i in range(cnt):
+    e=struct.unpack_from("<3f", f, 64+i*12)
+    dx=e[0]-cam[0]; dy=e[1]-cam[1]; dz=e[2]-cam[2]
+    hd=math.hypot(dx,dy)
+    if hd<1: continue
+    bearing=math.degrees(math.atan2(dy,dx))
+    elev=math.degrees(math.atan2(dz,hd))
+    dot=(dx*fw[0]+dy*fw[1]+dz*fw[2])/math.sqrt(dx*dx+dy*dy+dz*dz)
+    rows.append((hd,i,e,bearing,elev,math.degrees(math.acos(max(-1,min(1,dot))))))
+rows.sort()
+print("???????????:")
+for hd,i,e,b,el,ang_off in rows[:8]:
+    print("   ent[%2d] d=%6.0f ??=%8.1f? ??=%6.1f? ?????=%6.2f?  ??=(%.1f,%.1f,%.1f)" % (i,hd,b,el,ang_off,e[0],e[1],e[2]))

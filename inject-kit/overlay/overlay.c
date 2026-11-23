@@ -26,7 +26,9 @@ static int   g_have;
 static FEED  g_last;
 static DWORD g_lastGood;
 static double g_fps;
-static double g_fov = 90.0;
+static double g_fov = 110.0;
+static double g_offX = 0.0, g_offY = 0.0;
+static int    g_fovLocked = 0;
 static double g_boxH = 72.0;
 static double g_boxW = 0.42;
 
@@ -125,14 +127,31 @@ static int WorldToScreen(const float* p, int w, int h, float* sx, float* sy)
 
     if (z <= 1.0) return 0;
     f = (w / 2.0) / tan(fovh * 3.14159265358979 / 360.0);
-    *sx = (float)(w / 2.0 + f * x / z);
-    *sy = (float)(h / 2.0 - f * y / z);
+    *sx = (float)(w / 2.0 + g_offX + f * x / z);
+    *sy = (float)(h / 2.0 + g_offY - f * y / z);
     (void)ux; (void)uy; (void)uz;
     return 1;
 }
 
+static int g_hotkey = 0;
+static void PollKeys(void)
+{
+    static int last = 0;
+    int now = (GetAsyncKeyState(VK_F1) & 0x8000) ? 1 : 0;
+    if (now && !last) { g_fov -= 0.5; g_fovLocked = 1; }
+    last = now;
+    now = (GetAsyncKeyState(VK_F2) & 0x8000) ? 1 : 0;
+    if (now && last != 2) { g_fov += 0.5; g_fovLocked = 1; }
+    if (now) last = 2; else if (!now && last == 2) last = 0;
+    if (GetAsyncKeyState(VK_F3) & 0x8000) { g_offY -= 1.0; g_fovLocked = 1; }
+    if (GetAsyncKeyState(VK_F4) & 0x8000) { g_offY += 1.0; g_fovLocked = 1; }
+    if (GetAsyncKeyState(VK_F5) & 0x8000) { g_offX -= 1.0; g_fovLocked = 1; }
+    if (GetAsyncKeyState(VK_F6) & 0x8000) { g_offX += 1.0; g_fovLocked = 1; }
+}
+
 static void Draw(HDC dc, int w, int h)
 {
+    PollKeys();
     HPEN pen = CreatePen(PS_SOLID, 2, RGB(0, 255, 0));
     char buf[160];
     float sx, sy, sx2, sy2;
@@ -144,51 +163,49 @@ static void Draw(HDC dc, int w, int h)
     SetTextColor(dc, RGB(0, 255, 0));
 
     _snprintf_s(buf, sizeof(buf), _TRUNCATE,
-                "sc overlay %dx%d fps=%.0f feed=%s  cam=(%.0f,%.0f,%.0f) ang=(%.1f,%.1f)",
-                w, h, g_fps, g_have ? "ok" : "none",
+                "sc overlay %dx%d fps=%.0f feed=%s fov=%.1f offX=%.0f offY=%.0f  cam=(%.0f,%.0f,%.0f) ang=(%.1f,%.1f)",
+                w, h, g_fps, g_have ? "ok" : "none", g_fov, g_offX, g_offY,
                 g_feed.cam[0], g_feed.cam[1], g_feed.cam[2], g_feed.ang[0], g_feed.ang[1]);
     TextOutA(dc, 8, 8, buf, (int)strlen(buf));
 
     if (g_lastGood && (GetTickCount() - g_lastGood) < 1500) {
+        /* ---- self box: independent, never blocks the entity loop ---- */
         feet[0] = g_feed.pos[0]; feet[1] = g_feed.pos[1]; feet[2] = g_feed.pos[2];
         head[0] = feet[0]; head[1] = feet[1]; head[2] = feet[2] + 72.0f;
         if (WorldToScreen(feet, w, h, &sx, &sy) && WorldToScreen(head, w, h, &sx2, &sy2)) {
             float bh = sy - sy2;
             float bw = bh * (float)g_boxW;
-            if (bh > 4 && bh < 4000) {
+            if (bh > 4 && bh < 4000)
                 Rectangle(dc, (int)(sx - bw / 2), (int)sy2, (int)(sx + bw / 2), (int)sy);
-            } else {
-                _snprintf_s(buf, sizeof(buf), _TRUNCATE, "proj off-screen h=%.0f", bh);
-                TextOutA(dc, 8, 28, buf, (int)strlen(buf));
-            }
-            {   /* other players */
-                HPEN ep = CreatePen(PS_SOLID, 2, RGB(255, 80, 80));
-                unsigned k;
-                SelectObject(dc, ep);
-                for (k = 0; k < g_feed.count && k < FEED_MAX_ENT; k++) {
-                    float e[3], s1, s2, s3, s4;
-                    float top[3];
-                    TrackUpdate((int)k, g_feed.ent[k]);
-                    TrackPredict(g_feed.ent[k], e);
-                    top[0] = e[0]; top[1] = e[1]; top[2] = e[2] + (float)g_boxH;
-                    if (WorldToScreen(e, w, h, &s1, &s2) && WorldToScreen(top, w, h, &s3, &s4)) {
-                        float hgt = s2 - s4;
-                        float wid = hgt * (float)g_boxW;
-                        if (hgt > 3 && hgt < 4000) {
-                            double dx = e[0] - g_feed.pos[0];
-                            double dy = e[1] - g_feed.pos[1];
-                            double dz = e[2] - g_feed.pos[2];
-                            double meters = sqrt(dx*dx + dy*dy + dz*dz) * 0.01905;  /* Apex unit -> m */
-                            Rectangle(dc, (int)(s1 - wid / 2), (int)s4, (int)(s1 + wid / 2), (int)s2);
-                            _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%.0fm", meters);
-                            TextOutA(dc, (int)(s1 - wid / 2), (int)s4 - 15, buf, (int)strlen(buf));
-                        }
+        }
+
+        /* ---- other entities: always drawn regardless of self projection ---- */
+        {
+            HPEN ep = CreatePen(PS_SOLID, 2, RGB(255, 80, 80));
+            unsigned k;
+            SelectObject(dc, ep);
+            for (k = 0; k < g_feed.count && k < FEED_MAX_ENT; k++) {
+                float e[3], s1 = 0, s2 = 0, s3 = 0, s4 = 0;
+                float top[3];
+                TrackUpdate((int)k, g_feed.ent[k]);
+                TrackPredict(g_feed.ent[k], e);
+                top[0] = e[0]; top[1] = e[1]; top[2] = e[2] + (float)g_boxH;
+                if (WorldToScreen(e, w, h, &s1, &s2) && WorldToScreen(top, w, h, &s3, &s4)) {
+                    float hgt = s2 - s4;
+                    float wid = hgt * (float)g_boxW;
+                    if (hgt > 3 && hgt < 4000) {
+                        double dx = e[0] - g_feed.pos[0];
+                        double dy = e[1] - g_feed.pos[1];
+                        double dz = e[2] - g_feed.pos[2];
+                        double meters = sqrt(dx*dx + dy*dy + dz*dz) * 0.01905;
+                        if (wid < 6) wid = 6;
+                        Rectangle(dc, (int)(s1 - wid / 2), (int)s4, (int)(s1 + wid / 2), (int)s2);
+                        _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%.0fm", meters);
+                        TextOutA(dc, (int)(s1 - wid / 2), (int)s4 - 15, buf, (int)strlen(buf));
                     }
                 }
-                DeleteObject(ep);
             }
-        } else {
-            TextOutA(dc, 8, 28, "behind camera", 13);
+            DeleteObject(ep);
         }
     }
     DeleteObject(pen);
@@ -201,7 +218,7 @@ static void LoadConfig(void)
     if (fopen_s(&f, "C:\\ProgramData\\sc_overlay.ini", "r") != 0 || !f) return;
     while (fgets(buf, sizeof(buf), f)) {
         double v;
-        if (sscanf_s(buf, "fov=%lf", &v) == 1 && v > 20 && v < 170) g_fov = v;
+        if (sscanf_s(buf, "fov=%lf", &v) == 1 && v > 20 && v < 170 && !g_fovLocked) g_fov = v;
         else if (sscanf_s(buf, "boxH=%lf", &v) == 1 && v > 10 && v < 200) g_boxH = v;
         else if (sscanf_s(buf, "boxW=%lf", &v) == 1 && v > 0.1 && v < 2.0) g_boxW = v;
     }
@@ -267,6 +284,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
 {
+    {   HMODULE u32 = GetModuleHandleA("user32.dll");
+        if (u32) { typedef BOOL (WINAPI *P)(void); P p2 = (P)GetProcAddress(u32, "SetProcessDPIAware"); if (p2) p2(); }
+    }
     WNDCLASSW wc = {0};
     MSG msg;
     (void)prev; (void)cmd; (void)show;

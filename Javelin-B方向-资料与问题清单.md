@@ -2969,3 +2969,88 @@ Patched:  48 B8 <eaanticheat+0x335390> FF E0   (mov rax,addr; jmp rax)
 4. Anybrain 若转为 EXPERIMENT_ONGOING 且命中 treatment-a，输入遥测会启用；
    纯 ESP（不注入输入、不改瞄准）受影响面较小
 ```
+
+---
+
+## 84. 描边（模型高亮）机制：离线版实现 → 零售版定位（2026-11-24）
+
+### 84.1 离线版源码（`r5flowstate-offline-training-lab`）
+
+文件：`sources/r5flowstate-sdk/s21-r5sdk-s21-unify/src/engine/client/training_highlight.cpp`
+自述：「One native model context with **depth-tested red fill and green outline**」
+
+核心代码：
+```c
+const int count = *(int*)((char*)s_table + 0x18);      // 条目数
+unsigned char* entry = *s_table + context * 52;        // 每条目 52 字节 (0x34)
+uint32_t bits; memcpy(&bits, entry, 4);
+bits = (bits & 0x3fff0000u) | 2u | (169u << 8) | 0x40000000u;
+//       保留高位          │    │         └─ 启用位
+//                          │    └─ 外轮廓函数 ID = 169
+//                          └─ 深度分支函数 ID = 2
+memcpy(entry + 4, (float[]){0,1,0,1,0,0}, 24);         // 6 个浮点参数
+*(int*)(entry + 48) = 0;                                // 绘制模式
+```
+定位 pattern：`48 6B C8 34 48 8B 05 ?? ?? ?? ?? 0F B6 0C 01`
+（`imul rcx,rax,0x34` = 索引×52，随后 `mov rax,[rip+X]` 取表指针）
+
+### 84.2 零售版定位结果（我们自己的构建）
+
+在 `.text` 里搜 `48 6B C8 34`：**21 处**，其中 12 处聚在 RVA `0x23CE8xx ~ 0x23CF3xx`，
+且**全部 12 处的 rip 相对目标都指向同一个全局：RVA `0x72BE6C0`**。
+
+这个 `0x72BE6C0` 正是之前 pattern 扫出的 `highlight` 偏移（当时来源 CApexDumpWasm）。
+读该全局 → `0x131D12F00`（有效指针，即表本体）。
+
+初始化循环印证布局（RVA 0x1C6D166）：
+```asm
+imul rcx, rax, 0x34        ; index × 52
+add  rcx, [rbx]            ; + 表基址
+mov  dword [rcx+0x18], -1
+movups [rcx+4], xmm0       ; 清 6 个浮点参数
+mov  dword [rcx], 3        ; 标志位默认 3
+```
+字段使用偏移覆盖 `+0x1c / +0x20 / +0x24 / +0x28 / +0x2c / +0x30`，与 52 字节条目吻合。
+
+### 84.3 参考仓库里的对应字段（bigdragon46）
+
+```json
+"OFF_GLOW_CONTEXT_ID": 668,          // 0x29C = 实体里的高亮上下文 ID（表索引）
+"GLOW_VISIBLE_TYPE": 620,            // 0x26C
+"OFFSET_GLOW_FIX": 616,              // 0x268
+"OFF_GLOW_HIGHLIGHT_TYPE_SIZE": 52   // 条目大小，与 0x34 一致 ← 交叉印证
+```
+
+W3AP 的 `[DT_HighlightSettings]`（另一构建）：
+```
+m_highlightTeamIndex       = 0x1d8
+m_highlightTeamBits        = 0x1e8
+m_highlightGenericContexts = 0x295
+m_highlightFocused         = 0x29d
+m_highlightFadeDuration    = 0x2a0
+```
+
+### 84.4 实测（当前版本）
+
+```
+自身实体 0x2603BCC40 : +0x268=0  +0x26C=0  +0x29C=6965
+假人实体 0x1CC432260 : +0x268=0  +0x26C=0  +0x29C=6965
+```
+两个不同实体读到相同的 6965 → `0x29C` 在本版本**不是**上下文 ID（或是未初始化哨兵值），
+需要重新定位实体侧的 context id 字段。
+
+### 84.5 结论与下一步
+
+已知：
+- ✅ 表地址：`模块 + 0x72BE6C0` → 表本体
+- ✅ 条目布局：52 字节，`+0` 标志、`+4` 六浮点、`+0x30` 绘制模式
+- ✅ 启用位掩码：`0x40000000`，轮廓函数 ID 169，深度分支 ID 2
+- ❌ **实体 → 上下文 ID 的映射**（零售版与离线版不同）
+
+下一步：
+```
+1. 枚举表的全部条目，看有效条目数与内容分布
+2. 在对局里找“某实体正被高亮”的时刻（寻血猎犬/希尔扫描）做差分，
+   观察表里哪个条目被改写 → 反推实体→条目的映射
+3. 拿到映射后即可对任意实体开启轮廓
+```
