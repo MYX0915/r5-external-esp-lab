@@ -3190,3 +3190,110 @@ Highlight_SetGenericHighlightContext → RVA 0x20191B0
 2. 或跟踪 Highlight_SetGenericHighlightContext 的调用者，确认 rcx 来源
 3. 拿到映射后：把目标实体的 context id 指向表里 out=169 的条目 → 游戏自绘轮廓
 ```
+
+---
+
+## 86. RTTI 路径实测：结构完好但类名被混淆（2026-11-24 05:2x）
+
+### 86.1 参考：KyTech《Reverse Engineering Apex Legends S25》方法论
+
+文章给出的标准流程（对 S25/2026-04 构建）：
+
+```
+1. .data 段搜 ".?AV" 类型描述符字符串（MSVC 名字修饰）
+2. 字符串地址回退两个指针宽度 → TypeDescriptor
+3. xref TypeDescriptor → RTTICompleteObjectLocator
+4. COL 前一个指针宽度 → vftable
+5. 用 vftable 比对实体 +0 的指针来分类实体
+```
+
+文中给出的 S25 偏移（参考，**与本版本不符**）：
+```
+m_vecOrigin     0x014C
+m_iHealth       0x0328
+m_iShields      0x032C
+m_iTeamNum      0x044C
+m_vecViewAngles 0x2470
+m_lifeState     0x0530
+m_bZooming      0x1E88
+EntityStride    0x20（与我们的实测一致 ✓）
+```
+其他要点：VP 矩阵在 `CClientState` 或其渲染附属结构内，行主序 4x4；
+骨骼走 `CPlayer → m_pStudioHdr → bone_matrix_array`，头骨 index 8、颈骨 6。
+
+### 86.2 本版本实测：RTTI 链结构完好
+
+从已知虚表反向验证（MSVC 布局：`vftable = [COL 指针][第一个虚函数]`，对象 vfptr 指向 vftable+8）：
+
+```
+C_Player 虚表 0x7FF68C7400E8
+  vtable-8 = 0x7FF68C8AD780  → RTTICompleteObjectLocator
+  COL: signature=0x1  offset=0  cdOffset=0
+       pTypeDescriptor = 0x403E588
+       pClassHierarchy = 0x322D700
+       pSelf           = 0x322D780
+
+假人 虚表 0x7FF68C769330
+  vtable-8 = 0x7FF68C8ADB98  → COL
+  COL: signature=0x1  pTypeDescriptor = 0x403EA50
+```
+
+`signature = 1` 确认是标准 x64 RTTI，两个COL 都合法。
+
+### 86.3 但类型名被逐字符替换
+
+```
+TypeDescriptor @ 0x7FF68D6BE588（C_Player）
+  +0x00 vfptr = 0x7FF68C624618
+  +0x10 name  = "NBXAPUZLJBOWOP"      ← 14 字符
+
+TypeDescriptor @ 0x7FF68D6BEA50（假人）
+  +0x10 name  = "JXATUDRJYWAEELXPZF"  ← 18 字符
+```
+
+对照预期长度：
+```
+".?AVCPlayer@@"        = 14 字符  ✓ 与密文同长
+".?AVC_AI_BaseNPC@@"   = 18 字符  ✓ 与密文同长
+```
+
+→ **结构保留、只替换字符** 的混淆方式。
+
+用已知明文反推 XOR 密钥（`.?AVCPlayer@@` vs `NBXAPUZLJBOWOP`）：
+```
+0x60 0x7D 0x19 0x17 0x13 0x05 0x36 0x2D 0x33 0x27 0x3D 0x17 0x0F
+```
+序列不重复 → **不是固定密钥 XOR**，可能是替换表或更复杂的变换。
+
+### 86.4 结论
+
+| 方法 | 本版本可用性 |
+|---|---|
+| 搜 `.?AV` 字符串找类 | ❌ `.rdata` 中 0 命中（描述符在 `.data`，且名字已混淆） |
+| 从 vtable 反查类名 | ❌ 名字被替换 |
+| 按 vtable 归类实体 | ✅ 仍有效（不依赖名字） |
+| 按字段签名判断对象类型 | ✅ 未尝试，推荐 |
+
+这是**反逆向措施**：引擎自身仍能用 RTTI，但外部无法按名字检索。
+
+### 86.5 参考来源（本轮收集）
+
+| 来源 | 要点 |
+|---|---|
+| `xTeJk/External-Apex-Tool` `UMCheat/offsets.cpp` | 完整 GLOW 偏移组（旧构建），见 85.2 |
+| KyTech《Reverse Engineering Apex Legends S25》2026-07-29 | RTTI 找回 CPlayer、局部玩家指针、VP 矩阵、实体列表、逐实体偏移 |
+| `Jiingz/apex-seraph` | Apex 专项，README 提到 Glow，未核实 Javelin 兼容 |
+| `Sndix/Apex-Legends-Simple-Glow` | Apex Glow 实现（仓库默认分支非 main，jsdelivr 404） |
+| `memcpyy/R5Apex-UserMode` | Apex Glow（旧构建） |
+| `ewenja/eac-kernel-analysis` | Javelin/Griffin 机制，无偏移，见 81–83 节 |
+| `ccdescipline/CApexDumpWasm` | 其 pattern 表是本项目多组偏移的来源，见 67 节 |
+
+### 86.6 下一步
+
+```
+1. 解 RTTI 名字替换表：需要一对可信的已知明文（可从引擎自身错误信息/
+   脚本类型名反查，或对比两个已知类名的字符频率）
+2. 或放弃类名，改用字段签名判定对象类型：
+   例如扫实体 +0x200~0x400，找"指向首字节<255 的小缓冲"的指针
+3. 继续跟 0x276e980，确认它对 C_Player 返回的到底是哪个地址
+```
