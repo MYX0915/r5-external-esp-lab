@@ -12,6 +12,7 @@ static PEPROCESS g_espProc = NULL;
 static ULONG g_entCount = 0;
 static float g_entList[FEED_MAX_ENT][3];
 #define TGT_ALIVE() (g_espProc && PsGetProcessExitStatus(g_espProc) == STATUS_PENDING)
+static CHAR* AppendFmt(CHAR* p, CHAR* end, const CHAR* fmt, ...);
 
 
 #define LOG_FILE L"\\??\\C:\\ProgramData\\kmaplog.txt"
@@ -416,6 +417,101 @@ static VOID DumpByVtable(PEPROCESS proc, U64 modBase, U64 wantVt, PUCHAR buf, UL
     KF("[mdump] vd: hits=%lu\n", hits);
 }
 
+
+/* ================= player signature scan =================
+   DT_BaseEntity ? health / teamNum / squadID / maxHealth ????????????
+   +0x00 health(1..1000)  +0x10 team(0..4)  +0x1C squad(0..64)  +0x4C maxHealth
+   ??????????????? vtable ????????
+*/
+
+/* ???? +0xDD0 ??????????bigdragon46 ???? OFF_BONES? */
+static VOID DumpBones(PEPROCESS proc, U64 inst, PUCHAR buf)
+{
+    CHAR* txt = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x8000, 'bont');
+    U64  p = 0;
+    ULONG i;
+    CHAR* w;
+    if (!txt) return;
+    RtlZeroMemory(txt, 0x8000); w = txt; w[0]=0;
+    if (!NT_SUCCESS(MemRead(proc, inst + 0xDD0, &p, 8)) || !p || p < 0x10000 || (p >> 47)) {
+        w = AppendFmt(w, txt + 0x8000, "no bone pointer at +0xDD0 (raw=0x%llX)\n", p);
+        WriteFileAt(L"\\??\\C:\\ProgramData\\sc_bones.txt", txt, (ULONG)(w-txt)+1);
+        ExFreePoolWithTag(txt,'bont'); return;
+    }
+    w = AppendFmt(w, txt + 0x8000, "bone array ptr = 0x%llX\n", p);
+    {   ULONG n = 0x30 * 128;
+        PUCHAR mb = ExAllocatePool2(POOL_FLAG_NON_PAGED, n, 'bont');
+        if (mb) {
+            SIZE_T got = 0;
+            NTSTATUS st = MmCopyVirtualMemory(proc, (PVOID)(ULONG_PTR)p, PsGetCurrentProcess(), mb, n, KernelMode, &got);
+            w = AppendFmt(w, txt + 0x8000, "read status=0x%X got=%Iu\n", st, got);
+            if (NT_SUCCESS(st)) {
+                for (i = 0; i < 48; i++) {
+                    float* m = (float*)(mb + i*0x30);
+                    w = AppendFmt(w, txt + 0x8000, "[%02lu] %.2f %.2f %.2f %.2f | t=(%.1f,%.1f,%.1f)\n",
+                                  i, m[0],m[1],m[2],m[3], m[3],m[7],m[11]);
+                }
+            }
+            ExFreePoolWithTag(mb,'bont');
+        }
+    }
+    WriteFileAt(L"\\??\\C:\\ProgramData\\sc_bones.txt", txt, (ULONG)(w-txt)+1);
+    KF("[mdump] bones dumped ptr=0x%llX\n", p);
+    ExFreePoolWithTag(txt,'bont');
+}
+
+static VOID SigScan(PEPROCESS proc, U64 arrVa, PUCHAR buf, ULONG reqId)
+{
+    CHAR* txt = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x10000, 'sigt');
+    PUCHAR eb  = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x2000, 'sigb');
+    ULONG  off, hits = 0;
+    CHAR*  w;
+    if (!txt || !eb) { if(txt) ExFreePoolWithTag(txt,'sigt'); if(eb) ExFreePoolWithTag(eb,'sigb'); return; }
+    RtlZeroMemory(txt, 0x10000); w = txt; w[0]=0;
+
+    for (off = 0; off < 0x200000; off += 0x10000) {
+        SIZE_T got = 0;
+        ULONG k;
+        if (!NT_SUCCESS(MmCopyVirtualMemory(proc, (PVOID)(ULONG_PTR)(arrVa + off), PsGetCurrentProcess(),
+                                            buf, 0x10000, KernelMode, &got)) || got != 0x10000)
+            continue;
+        for (k = 0; k + 0x20 <= 0x10000; k += 0x20) {
+            U64 inst = *(U64*)(buf + k);
+            ULONG o;
+            if (!inst || inst < 0x10000 || (inst >> 47)) continue;
+            if (!NT_SUCCESS(MemRead(proc, inst, eb, 0x2000))) continue;
+            for (o = 0x40; o + 0x100 < 0x2000; o += 4) {
+                LONG h  = *(LONG*)(eb + o);
+                LONG t  = *(LONG*)(eb + o + 0x10);
+                LONG sq = *(LONG*)(eb + o + 0x1C);
+                LONG mh = *(LONG*)(eb + o + 0x4C);
+                float ps[3];
+                if (h < 1 || h > 1000) continue;
+                if (t < 0 || t > 4) continue;
+                if (sq < 0 || sq > 64) continue;
+                if (mh < 1 || mh > 2000) continue;
+                RtlZeroMemory(ps, sizeof(ps));
+                MemRead(proc, inst + 0x978, ps, 12);
+                w = AppendFmt(w, txt + 0x10000, "0x%llX hOff=0x%X hp=%ld team=%ld squad=%ld maxhp=%ld pos=%.1f %.1f %.1f\n",
+                              inst, o, h, t, sq, mh, ps[0], ps[1], ps[2]);
+                hits++;
+                break;
+            }
+            if (hits > 300) break;
+        }
+        if (hits > 300) break;
+    }
+    WriteFileAt(L"\\??\\C:\\ProgramData\\sc_players.txt", txt, (ULONG)(w - txt) + 1);
+    KF("[mdump] sig done hits=%lu\n", hits);
+    ExFreePoolWithTag(eb, 'sigb');
+    ExFreePoolWithTag(txt, 'sigt');
+}
+
+static VOID ClassPass(PEPROCESS proc, U64 arrVa, PUCHAR buf, U64 wantVt, BOOLEAN census);
+static VOID SigScan(PEPROCESS proc, U64 arrVa, PUCHAR buf, ULONG reqId);
+static VOID DumpBones(PEPROCESS proc, U64 inst, PUCHAR buf);
+static NTSTATUS MemRead(PEPROCESS proc, U64 va, PVOID dst, SIZE_T len);
+
 static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN)
 {
     PUCHAR buf = ExAllocatePool2(POOL_FLAG_NON_PAGED, DUMP_CHUNK, 'snap');
@@ -453,6 +549,37 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                                 va2 = va2 * 16 + d; q2++;
                             }
                             if (va2) ProbeVa(proc, va2, buf);
+                        }
+                        else if ((p[0] == 'b' || p[0] == 'B') && (p[1] == 'o' || p[1] == 'O')) {
+                            U64 bi = 0; UCHAR* q4 = p + 2;
+                            while (q4 < le && *q4 == ' ') q4++;
+                            if (q4 + 1 < le && q4[0]=='0' && (q4[1]=='x'||q4[1]=='X')) q4 += 2;
+                            while (q4 < le) { UCHAR c=*q4; U64 d;
+                                if (c>='0'&&c<='9') d=c-'0';
+                                else if ((c|0x20)>='a'&&(c|0x20)<='f') d=(c|0x20)-'a'+10;
+                                else break; bi=bi*16+d; q4++; }
+                            if (bi) DumpBones(proc, bi, buf);
+                        }
+                        else if ((p[0] == 's' || p[0] == 'S') && (p[1] == 'i' || p[1] == 'I')) {
+                            SigScan(proc, modBaseForNpc + RVA_ENTITY_ARRAY, buf, n);
+                        }
+                        else if ((p[0] == 'c' || p[0] == 'C') && (p[1] == 'l' || p[1] == 'L')) {
+                            ClassPass(proc, modBaseForNpc + RVA_ENTITY_ARRAY, buf, 0, TRUE);
+                        }
+                        else if ((p[0] == 'e' || p[0] == 'E') && (p[1] == 'n' || p[1] == 'N')) {
+                            U64 want2 = 0;
+                            UCHAR* q3 = p + 2;
+                            while (q3 < le && *q3 == ' ') q3++;
+                            if (q3 + 1 < le && q3[0] == '0' && (q3[1] == 'x' || q3[1] == 'X')) q3 += 2;
+                            while (q3 < le) {
+                                UCHAR c = *q3; U64 d;
+                                if (c >= '0' && c <= '9') d = c - '0';
+                                else if ((c | 0x20) >= 'a' && (c | 0x20) <= 'f') d = (c | 0x20) - 'a' + 10;
+                                else break;
+                                want2 = want2 * 16 + d; q3++;
+                            }
+                            KF("[mdump] ent req vt=0x%llX\n", want2);
+                            if (want2) ClassPass(proc, modBaseForNpc + RVA_ENTITY_ARRAY, buf, want2, FALSE);
                         }
                         else if (p[0] == 'v' && (p[1] == 'd' || p[1] == 'D')) {
                             U64 want = 0;
@@ -601,6 +728,91 @@ static ULONG ContainsStr(const char* hay, const char* needle)
 
 /* collect instances whose vtable equals the local player's (other C_Player) */
 /* Scan all instances for a plausible world position at entity+0x978 */
+
+/* ================= batch class tooling ================= */
+#define CLS_MAX 512
+typedef struct _CLSREC { U64 Vt; ULONG Count; U64 Sample[3]; } CLSREC;
+
+static CHAR* AppendFmt(CHAR* p, CHAR* end, const CHAR* fmt, ...)
+{
+    CHAR tmp[256];
+    va_list ap;
+    size_t n = 0;
+    va_start(ap, fmt);
+    RtlStringCchVPrintfA(tmp, sizeof(tmp), fmt, ap);
+    va_end(ap);
+    RtlStringCchLengthA(tmp, sizeof(tmp), &n);
+    if (p + n < end) { RtlCopyMemory(p, tmp, n); p += n; *p = 0; }
+    return p;
+}
+
+/* ?????????? vtable ???cls ?????ent ??????? + ?? */
+static VOID ClassPass(PEPROCESS proc, U64 arrVa, PUCHAR buf, U64 wantVt, BOOLEAN census)
+{
+    CLSREC* rec = ExAllocatePool2(POOL_FLAG_NON_PAGED, sizeof(CLSREC) * CLS_MAX, 'clsr');
+    CHAR*    txt = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x10000, 'clst');
+    ULONG    ncls = 0, off;
+    CHAR*    w;
+
+    if (!rec || !txt) { if (rec) ExFreePoolWithTag(rec,'clsr'); if (txt) ExFreePoolWithTag(txt,'clst'); return; }
+    RtlZeroMemory(rec, sizeof(CLSREC) * CLS_MAX);
+    RtlZeroMemory(txt, 0x10000);
+    w = txt; w[0] = 0;
+
+    for (off = 0; off < 0x200000; off += 0x10000) {
+        SIZE_T got = 0;
+        ULONG k;
+        if (!NT_SUCCESS(MmCopyVirtualMemory(proc, (PVOID)(ULONG_PTR)(arrVa + off), PsGetCurrentProcess(),
+                                            buf, 0x10000, KernelMode, &got)) || got != 0x10000)
+            continue;
+        for (k = 0; k + 0x20 <= 0x10000; k += 0x20) {
+            U64 inst = *(U64*)(buf + k);
+            U64 vt = 0;
+            if (!inst || inst < 0x10000 || (inst >> 47)) continue;
+            if (!NT_SUCCESS(MemRead(proc, inst, &vt, 8)) || !vt) continue;
+
+            if (!census) {
+                float v[3];
+                if (vt != wantVt) continue;
+                RtlZeroMemory(v, sizeof(v));
+                MemRead(proc, inst + 0x978, v, 12);
+                w = AppendFmt(w, txt + 0x10000, "0x%llX 0x%llX %.2f %.2f %.2f\n",
+                              inst, vt, v[0], v[1], v[2]);
+                continue;
+            }
+            {   ULONG i;
+                for (i = 0; i < ncls; i++) if (rec[i].Vt == vt) break;
+                if (i == ncls) {
+                    if (ncls >= CLS_MAX) continue;
+                    rec[ncls].Vt = vt; rec[ncls].Count = 0;
+                    ncls++;
+                }
+                if (rec[i].Count < 3) rec[i].Sample[rec[i].Count] = inst;
+                rec[i].Count++;
+            }
+        }
+    }
+
+    if (census) {
+        ULONG i, j;
+        for (i = 0; i < ncls; i++)
+            for (j = i + 1; j < ncls; j++)
+                if (rec[j].Count > rec[i].Count) { CLSREC t = rec[i]; rec[i] = rec[j]; rec[j] = t; }
+        w = AppendFmt(w, txt + 0x10000, "# classes=%lu\n", ncls);
+        for (i = 0; i < ncls && i < 200; i++)
+            w = AppendFmt(w, txt + 0x10000, "0x%llX %lu 0x%llX 0x%llX 0x%llX\n",
+                          rec[i].Vt, rec[i].Count, rec[i].Sample[0], rec[i].Sample[1], rec[i].Sample[2]);
+        WriteFileAt(L"\\??\\C:\\ProgramData\\sc_classes.txt", txt,
+                    (ULONG)(w - txt) + 1);
+        KF("[mdump] cls done classes=%lu\n", ncls);
+    } else {
+        WriteFileAt(L"\\??\\C:\\ProgramData\\sc_ents.txt", txt, (ULONG)(w - txt) + 1);
+        KF("[mdump] ent done vt=0x%llX bytes=%Id\n", wantVt, (INT_PTR)(w - txt));
+    }
+    ExFreePoolWithTag(txt, 'clst');
+    ExFreePoolWithTag(rec, 'clsr');
+}
+
 static ULONG ScanWorldPos(PEPROCESS proc, U64 arrVa, const float cam[3], float out[][3], ULONG max)
 {
     PUCHAR buf = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x10000, 'scnW');
@@ -765,30 +977,20 @@ static VOID EspLoop(PEPROCESS proc, U64 modBase)
         }
         f.Count = g_entCount;
         if (g_entCount) RtlCopyMemory(f.Ent, g_entList, sizeof(float) * 3 * FEED_MAX_ENT);
-        {   /* per-tick write (persistent handle version hung the driver) */
-            IO_STATUS_BLOCK io; LARGE_INTEGER off;
-            {
+        {   /* persistent handle; on any failure close and reopen next tick */
+            IO_STATUS_BLOCK io; LARGE_INTEGER off; NTSTATUS st;
+            if (!g_feedHandle) {
                 UNICODE_STRING up2; OBJECT_ATTRIBUTES oa2;
                 RtlInitUnicodeString(&up2, FEED_FILE);
                 InitializeObjectAttributes(&oa2, &up2, OBJ_CASE_INSENSITIVE|OBJ_KERNEL_HANDLE, NULL, NULL);
-                ZwCreateFile(&g_feedHandle, GENERIC_WRITE|SYNCHRONIZE, &oa2, &io, NULL, FILE_ATTRIBUTE_NORMAL,
-                             FILE_SHARE_READ|FILE_SHARE_WRITE, FILE_OVERWRITE_IF,
-                             FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0);
-            }
-            if (!g_feedHandle) {
-                UNICODE_STRING up; OBJECT_ATTRIBUTES oa;
-                RtlInitUnicodeString(&up, FEED_FILE);
-                InitializeObjectAttributes(&oa, &up, OBJ_CASE_INSENSITIVE|OBJ_KERNEL_HANDLE, NULL, NULL);
-                if (NT_SUCCESS(ZwCreateFile(&g_feedHandle, GENERIC_WRITE|SYNCHRONIZE, &oa, &io, NULL, FILE_ATTRIBUTE_NORMAL,
-                                            FILE_SHARE_READ|FILE_SHARE_WRITE, FILE_OPEN_IF,
-                                            FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0)))
-                    K("[mdump] feed handle opened\n");
-                else { SleepMs(50); continue; }
+                st = ZwCreateFile(&g_feedHandle, GENERIC_WRITE|SYNCHRONIZE, &oa2, &io, NULL,
+                                  FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ|FILE_SHARE_WRITE,
+                                  FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0);
+                if (!NT_SUCCESS(st)) { g_feedHandle = NULL; SleepMs(20); continue; }
             }
             off.QuadPart = 0;
-            ZwWriteFile(g_feedHandle, NULL, NULL, NULL, &io, &f, sizeof(f), &off, NULL);
-            ZwClose(g_feedHandle);
-            g_feedHandle = NULL;
+            st = ZwWriteFile(g_feedHandle, NULL, NULL, NULL, &io, &f, sizeof(f), &off, NULL);
+            if (!NT_SUCCESS(st)) { ZwClose(g_feedHandle); g_feedHandle = NULL; }
         }
         if ((tick++ % 120) == 0)
             KF("[mdump] esp tick ok=%lu inst=0x%llX cam=(%.1f,%.1f,%.1f) ang=(%.1f,%.1f)\n",

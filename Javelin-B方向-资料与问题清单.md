@@ -2698,3 +2698,112 @@ regions with changing float32: 3
 1. 用 dump 工具（CApexDumpWasm）对当前 r5apex_dx12.exe 生成版本偏移表
 2. 或对离线二进制做静态分析，确定匹配局下的实体列表与玩家类布局
 3. 已验证可用的训练场路径（+0x978）可作为回归测试基准
+
+---
+
+## 80. 社区偏移表交叉验证 + 驱动批量工具（2026-11-24）
+
+### 80.1 来源与结论
+
+| 仓库 | 内容 | 与我们构建的关系 |
+|---|---|---|
+| `W3AP/Apex-offsets` | `offsets.h`：`[Mics]` 模块偏移 + **`[RecvTable]` 完整网络字段表** | 不同构建，但字段名与相对间距可用 |
+| `bigdragon46/APEX_offsets` | `offsets.json`：实体相对偏移 | **`OFF_STUDIOHDR = 4048 = 0xFD0` 与我们实测完全一致 → 极可能是同一构建** |
+| `ewenja/eac-kernel-analysis` | Griffin 虚拟化 / Javelin 机制分析 | 无偏移，仅方法论参考 |
+| `blog.drof.space`（DROF） | Javelin 下内存访问实践 | Cloudflare 403，正文未取到 |
+
+参考文件已存入 `refs/W3AP-offsets.txt`、`refs/bigdragon46-offsets.json`。
+
+### 80.2 两份表的字段间距互相印证
+
+```
+W3AP:        m_iHealth 0x324  →  m_iTeamNum 0x334   间距 0x10
+bigdragon46: OFF_HEALTH 808(0x328) → OFF_TEAM_NUMBER 824(0x338)   间距 0x10
+```
+两个独立来源的间距完全一致 → 字段结构可信。
+
+### 80.3 新拿到、尚未验证的偏移（bigdragon46，疑同构建）
+
+| 字段 | 偏移 | 状态 |
+|---|---|---|
+| **OFF_BONES** | **3536 = 0xDD0** | 未验证（**骨骼矩阵指针，从未测过**） |
+| OFF_HEALTH | 808 = 0x328 | 待验证 |
+| OFF_TEAM_NUMBER | 824 = 0x338 | 待验证 |
+| OFF_LIFE_STATE | 1680 = 0x690 | 待验证 |
+| OFF_ENTITY_ORIGIN | 380 = 0x17C | 待验证（我们实测坐标在 0x978） |
+| OFF_ABSVELOCITY | 368 = 0x170 | 与我们 `m_vecAbsOrigin=0x170` 冲突，待澄清 |
+| OFF_WEAPON_AMMO | 5600 = 0x15E0 | 我们实测 0x1600 |
+| OFF_VIEWANGLES | 9600 = 0x2580 | 我们实测 0x1F84 / m_viewangle 0x25C8 |
+
+### 80.4 与 W3AP 表的逐项对比（我们 vs 该文件）
+
+```
+字段              我们实测      该文件        差
+ViewMatrix       0x11A390     0x11A390     完全一致
+m_vecAbsOrigin   0x170        0x16C        +4
+studioHdr        0xFD0        0x1000       -48
+m_viewangle      0x25C8       0x2618       -80
+camera_origin    0x1F78       0x1FCC       -84
+LocalPlayer      0x3EAC660    0x2670E18    不同构建
+```
+
+### 80.5 W3AP `[RecvTable]` 关键片段（字段名 → 相对偏移）
+
+```
+[DT_BaseEntity]
+m_cellX/Y/Z    = 0x0 / 0x4 / 0x8
+m_localOrigin  = 0xc
+m_iHealth      = 0x324
+m_iTeamNum     = 0x334
+m_squadID      = 0x340
+m_localAngles  = 0x384
+m_nModelIndex  = 0x60
+m_iTeamNum     = 0x334
+
+[DT_Player]
+m_inventory    = 0x1988
+m_fFlags       = 0xc8
+m_grapple      = 0x2d90
+
+[DT_AI_BaseNPC]
+m_localOrigin  = 0x18
+m_iHealth      = 0x324
+m_inventory    = 0x1988
+
+[DT_AnimRelativeData]  / [DT_BaseAnimating]
+m_animRelativeData = 0x9a8   ← 骨骼/动画相关结构
+m_SequenceTransitioner = 0xb50
+```
+
+### 80.6 驱动新增四项能力（已编译 bin\mdump.sys）
+
+| 命令 | 说明 | 输出文件 |
+|---|---|---|
+| `cls` | 全实体按 vtable 聚合（8233 个，秒级） | `sc_classes.txt` |
+| `ent 0x<vtable>` | 导出该类全部实例地址 + `+0x978` 坐标 | `sc_ents.txt` |
+| `sig` | 按 血量/队伍/小队/最大血量 特征找玩家（不依赖 vtable） | `sc_players.txt` |
+| `bones 0x<实体>` | 读 `实体+0xDD0` 骨骼指针并导出前 48 根矩阵 | `sc_bones.txt` |
+| — | feed 句柄改为持久化（此前 93ms/tick，预期降到 1~2ms） | — |
+
+### 80.7 `sig` 特征扫描原理
+
+`DT_BaseEntity` 中以下字段的相对间距结构稳定：
+
+```
++0x00  m_iHealth    1..1000
++0x10  m_iTeamNum   0..4
++0x1C  m_squadID
++0x4C  m_iMaxHealth
+```
+
+在 8233 个实体里同时满足这四条的几乎只有玩家，**比 vtable 匹配更抗版本变化**
+（vtable 随类改变，这套字段间距不变）。
+
+### 80.8 待验证清单（游戏启动后按序执行）
+
+```
+1. bones 0x<自己实例>    → 0xDD0 是否骨骼指针（通 = 骨骼 ESP 直接解决）
+2. sig                   → 能否按血量特征列出所有玩家（含远程）
+3. ent 0x7FF779A69330    → 训练场假人坐标回归测试
+4. cls                   → 8233 实体的类分布，确认玩家类归属
+```
