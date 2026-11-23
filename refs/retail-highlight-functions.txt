@@ -1,0 +1,41 @@
+﻿本版本（2026-11-24 dump）Highlight 系统脚本函数名
+来源: rdata dump 76_7FF68C324000.bin 字符串扫描
+
+Highlight_Enable
+Highlight_SetInheritHighlight
+Highlight_GetInheritHighlight
+Highlight_SetGenericHighlightContext
+Highlight_GetGenericHighlightContext
+Highlight_HideOutline
+Highlight_HideInside
+eHighlightDrawFunc
+void functionref( entity weapon, entity highlightedModel, bool validHighlight )
+
+highlight_system
+highlight_draw
+highlight_IDBuffer
+highlight_ColorBuffer
+highlight_ZBuffer
+highlight_GatherHorizontalBuffer
+highlight_GatherVerticalBuffer
+highlight_object_max_count
+highlight_enable_discard
+highlight_lazy_clear_buffers
+highlight_log
+highlight contexts
+
+字符串 VA:
+Highlight_Enable                     = 0x7FF68C734418
+Highlight_SetGenericHighlightContext = 0x7FF68C734450
+Highlight_HideOutline                = 0x7FF68C7343E8
+
+原生实现（字符串 xref 反查）:
+Highlight_Enable                     → RVA 0x202D780
+Highlight_SetGenericHighlightContext → RVA 0x20191B0
+
+关键字段:
+实体 + 0x298 = 指向"高亮上下文 ID"的指针（byte）
+实体 + 0x33C bit1 = 队伍/标志（Highlight_Enable 使用）
+表全局 RVA 0x72BE6C0，条目 0x34 字节
+
+实测: C_Player 实体 +0x298 不是有效指针 → rcx 可能是脚本层包装器对象

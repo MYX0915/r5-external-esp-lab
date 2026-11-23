@@ -1,7 +1,9 @@
-import capstone
-text=open(r"C:\ProgramData\scdump\2_7FF776981000.bin","rb").read()
-md=capstone.Cs(capstone.CS_ARCH_X86, capstone.CS_MODE_64)
-# dump the first 0x60 bytes of 0x209A0D0 to see the arg source
-rva=0x209A0D0; off=rva-0x1000
-for ins in md.disasm(text[off:off+0x40], rva):
-    print("  0x%08X  %-22s %s %s" % (ins.address, ins.bytes.hex(), ins.mnemonic, ins.op_str))
+import struct, glob, os
+for name in ("me","dummy"):
+    fn="ctx_%s.txt"%name
+    if not os.path.exists(fn): continue
+    t=open(fn).read().split()[0]; hexv=t[2:]
+    fs=sorted([p for p in glob.glob(r"C:\ProgramData\scdump\*_%s.bin"%hexv) if os.path.getsize(p)>=0x10], key=os.path.getmtime)
+    if not fs: print(name,"ctx ????"); continue
+    raw=open(fs[-1],"rb").read()
+    print("%-6s ctx?? 0x%s ? ??? = %d (0x%02X)" % (name, hexv, raw[0], raw[0]))

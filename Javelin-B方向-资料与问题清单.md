@@ -3054,3 +3054,139 @@ m_highlightFadeDuration    = 0x2a0
    观察表里哪个条目被改写 → 反推实体→条目的映射
 3. 拿到映射后即可对任意实体开启轮廓
 ```
+
+---
+
+## 85. 高亮（描边）实地反查：脚本函数 → 原生实现 → 实体字段（2026-11-24 05:0x）
+
+### 85.1 新增参考来源（用户检索）
+
+| 来源 | 内容 | 与本项目关系 |
+|---|---|---|
+| `xTeJk/External-Apex-Tool` → `UMCheat/offsets.cpp` | **完整 GLOW 偏移组**，注释标出对应脚本函数 | ★ 最关键 |
+| `outl4wz/apex-squirrelscripts-linux`（DeepWiki 索引 2026-10-29） | Entity Glow / Outline Rendering、Squirrel 脚本实现 | 脚本路线，非内存读取 |
+| `voidfnc/mcp-ctfgamereversing` → `plugins/game-offsets/apex-offsets.md` | Apex offsets 数据库，含 glow / highlight context 分类 | 索引性质 |
+| `Sinister` 博客《Unreal Engine - External Read Only Chams/Glow》（2026-06-14） | 外部读取骨骼 + 独立 GPU 渲染 Chams/Bloom | 泛 UE 方案 |
+| `Snoogens101/ApexDMA` → `Glow.hpp` | DMA 项目，含 glow / 可见性状态 | 历史项目 |
+| `Echo-Apex-External` | 外部 overlay ESP | 非发光路线 |
+
+### 85.2 xTeJk 的 offsets.cpp 全文（旧构建，字段名与结构可参考）
+
+```cpp
+// BOX
+OFFSET_MATRIX      = 0x001B3BD0;  // ViewMatrix（全局）
+OFFSET_RENDER      = 0x408B768;   // ViewRender
+OFFSET_ENTITYLIST  = 0x18DA3F8;   // cl_entitylist
+OFFSET_ORIGIN      = 0x14C;       // m_vecAbsOrigin（实体相对）
+OFFSET_LOCAL_ENT   = 0x1C898F8;   // LocalPlayer
+
+// ENTITY
+OFFSET_TEAM         = 0x0450;  // m_iTeamNum
+OFFSET_HEALTH       = 0x0440;  // m_iHealth
+OFFSET_SHEILD       = 0x0170;  // m_shieldHealth
+OFFSET_LIFE_STATE   = 0x0798;  // m_lifeState
+OFFSET_BLEED_OUT    = 0x25E8;
+OFFSET_VISIBLE_TIME = 0x1A4C;
+
+// GLOW  ★
+GLOW_CONTEXT      = 0x3C8;  // Script_Highlight_SetCurrentContext
+GLOW_VISIBLE_TYPE = 0x3D0;  // Script_Highlight_SetVisibilityType（第 5 个 mov）
+GLOW_TYPE         = 0x2C4;  // Script_Highlight_GetState + 4
+GLOW_COLOR        = 0x1D0;  // Script_CopyHighlightState（第 15 个 mov）
+```
+
+**本版本实测（均不匹配，仅供结构参考）**：
+```
+自身  +0x2C4=0   +0x1D0=0   +0x3C8=garbage  +0x3D0=garbage
+假人  +0x2C4=2^30 +0x1D0=1  +0x3C8=0        +0x3D0=0
++0x440 / +0x450 / +0x798 均读不到合理的血量/队伍
+```
+
+### 85.3 本版本真正的脚本函数名（`.rdata` 字符串）
+
+```
+Highlight_Enable
+Highlight_SetInheritHighlight / Highlight_GetInheritHighlight
+Highlight_SetGenericHighlightContext / Highlight_GetGenericHighlightContext
+Highlight_HideOutline / Highlight_HideInside
+eHighlightDrawFunc
+highlight_system / highlight_draw / highlight_IDBuffer
+highlight_ColorBuffer / highlight_ZBuffer
+highlight_object_max_count / highlight_enable_discard
+```
+
+字符串地址（本次 dump）：
+```
+Highlight_Enable                     VA 0x7FF68C734418
+Highlight_SetGenericHighlightContext VA 0x7FF68C734450
+Highlight_HideOutline                VA 0x7FF68C7343E8
+```
+
+### 85.4 字符串 xref → 原生实现
+
+注册代码形态：
+```
+0x200BDAF  lea rax, 0x7FF68B6AD780   ← 函数指针（Highlight_Enable 实现）
+0x200BDDC  lea rdx, 0x7FF68C734418   ← 字符串 "Highlight_Enable"
+```
+
+得到：
+```
+Highlight_Enable                     → RVA 0x202D780
+Highlight_SetGenericHighlightContext → RVA 0x20191B0
+```
+
+### 85.5 反汇编：实体侧字段
+
+`Highlight_SetGenericHighlightContext`（RVA 0x20191B0）：
+```asm
+0x020191B0  push rdi
+0x020191B6  lea  eax, [rdx + 1]        ; context + 1
+0x020191BC  cmp  eax, 0x100            ; context < 255
+0x020191C7  mov  rax, [rcx + 0x298]    ; ★ 实体 + 0x298 = 指向上下文 ID 的指针
+0x020191DB  cmovne ebx, edx            ; ebx = context（或 0xFF）
+0x020191DE  movzx edx, byte [rax]      ; 旧值
+0x020191E1  mov  byte [rax], bl        ; ★ 写入 context id
+0x020191EB  add  rcx, 0x280            ; 另一个子结构
+0x02019201  cmp  ebx, [rip + 0x52a54d1]     ; 与全局 count 比较
+0x02019214  imul rdx, rax, 0x34             ; ×52
+0x02019218  add  rdx, [rip + 0x52a54a1]     ; + 表基址 → 0x72BE6C0（第三次印证）
+```
+
+`Highlight_Enable`（RVA 0x202D780）：
+```asm
+0x0202D79B  mov  ecx, [rbx + 0x58]
+0x0202D7A3  mov  r8d, [rax + 0x33c]    ; 实体 + 0x33C 的 bit1（队伍/标志）
+0x0202D7B4  shr  r8, 1
+0x0202D7B7  and  r8d, 1
+0x0202D7BB  or   r8, 0x2800000000000000
+0x0202D7CC  mov  [rax + rcx*8], r8     ; 压入渲染命令缓冲
+```
+
+### 85.6 卡点：`+0x298` 在 C_Player 上不是指针
+
+```
+自身实体 0x1C52C9830  +0x298 = 0x1B35002A9F5A     （非堆地址）
+假人实体 0x131E13E90  +0x298 = 0x4000000000000001   （明显不是指针）
+```
+→ 该函数收到的 `rcx` **不是 C_Player 实体本身**，可能是脚本层实体包装器或独立的高亮组件对象。
+
+### 85.7 已确立的完整链条（三重印证）
+
+| 环节 | 值 | 印证来源 |
+|---|---|---|
+| 表全局 | `模块 + 0x72BE6C0` | CApexDumpWasm pattern / 12 处 imul 代码 / 0x2019218 的 rip 引用 |
+| 表本体 | 读全局得 `0x131D12F00` | 实测 |
+| 条目大小 | `0x34`（52 字节） | 离线版源码 / bigdragon46 `GLOW_HIGHLIGHT_TYPE_SIZE=52` / 代码 `imul ×0x34` |
+| 启用位 | `0x40000000` | 离线版源码 + 表内条目实测 |
+| 深度分支 ID | `2` | 离线版源码 |
+| 外轮廓 ID | `169` | 离线版源码 + 表内条目（out=169） |
+| 实体侧字段 | `+0x298`（指针 → 字节） | 反汇编 |
+
+### 85.8 下一步
+
+```
+1. 找 +0x298 上有有效指针的对象类型（扫实体 +0x200~0x400 找指向小缓冲的指针）
+2. 或跟踪 Highlight_SetGenericHighlightContext 的调用者，确认 rcx 来源
+3. 拿到映射后：把目标实体的 context id 指向表里 out=169 的条目 → 游戏自绘轮廓
+```
