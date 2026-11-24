@@ -33,6 +33,7 @@ typedef struct _FEED {
 } FEED;
 
 static void DrawBars(HDC dc, int k, int x0, int y0, int bh, int wid);
+static void SaveConfig(void);
 
 static HWND  g_overlay, g_game;
 static FEED  g_feed;
@@ -40,9 +41,31 @@ static int   g_have;
 static FEED  g_last;
 static DWORD g_lastGood;
 static double g_fps;
-static double g_fov = 110.0;
+static double g_fov = 110.0;        /* ????????? FOV?? EffectiveFov ??? */
+static double g_gameFov = 110.0;    /* ??? FOV ????4:3 ??? */
+#define DPI 3.14159265358979
+
+/* Apex ? FOV ??? 4:3 ????? FOV?
+ * ?????? FOV = 2*atan( tan(gameFov/2) * (aspect)/(4/3) )
+ * 16:9 + gameFov=110 ? 124.6??????????? */
+static double EffectiveFov(int w, int h)
+{
+    double t = tan(g_gameFov * DPI / 360.0);
+    double asp = (h > 0) ? ((double)w / (double)h) : (16.0 / 9.0);
+    double v;
+    t *= asp / (4.0 / 3.0);
+    v = 2.0 * atan(t) * 180.0 / DPI;
+    if (v < 20.0) v = 20.0;
+    if (v > 175.0) v = 175.0;
+    return v;
+}
 static double g_offX = 0.0, g_offY = 0.0;
 static int    g_fovLocked = 0;
+/* ---- SkyNade ???? ---- */
+static int    g_nadeOn   = 0;
+static double g_nadeV    = 1300.0;  /* in/s ???? */
+static double g_nadeG    = 725.0;   /* in/s? ???? */
+static double g_nadeFuse = 4.0;
 static double g_boxH = 72.0;
 static double g_boxW = 0.42;
 
@@ -137,7 +160,7 @@ static int WorldToScreen(const float* p, int w, int h, float* sx, float* sy)
     double z = dx * fx + dy * fy + dz * fz;
     double x = dx * rx + dy * ry + dz * rz;
     double y = dx * ux + dy * uy + dz * uz;
-    double f, fovh = g_fov;
+    double f, fovh = EffectiveFov(w, h);
 
     if (z <= 1.0) return 0;
     f = (w / 2.0) / tan(fovh * 3.14159265358979 / 360.0);
@@ -148,19 +171,146 @@ static int WorldToScreen(const float* p, int w, int h, float* sx, float* sy)
 }
 
 static int g_hotkey = 0;
+static int g_cfgDirty = 0;
+static DWORD g_cfgSaveAt = 0;
 static void PollKeys(void)
 {
     static int last = 0;
     int now = (GetAsyncKeyState(VK_F1) & 0x8000) ? 1 : 0;
-    if (now && !last) { g_fov -= 0.5; g_fovLocked = 1; }
+    if (now && !last) { g_gameFov -= 0.5; g_fovLocked = 1; g_cfgDirty = 1; }
     last = now;
     now = (GetAsyncKeyState(VK_F2) & 0x8000) ? 1 : 0;
-    if (now && last != 2) { g_fov += 0.5; g_fovLocked = 1; }
+    if (now && last != 2) { g_gameFov += 0.5; g_fovLocked = 1; g_cfgDirty = 1; }
     if (now) last = 2; else if (!now && last == 2) last = 0;
-    if (GetAsyncKeyState(VK_F3) & 0x8000) { g_offY -= 1.0; g_fovLocked = 1; }
-    if (GetAsyncKeyState(VK_F4) & 0x8000) { g_offY += 1.0; g_fovLocked = 1; }
-    if (GetAsyncKeyState(VK_F5) & 0x8000) { g_offX -= 1.0; g_fovLocked = 1; }
-    if (GetAsyncKeyState(VK_F6) & 0x8000) { g_offX += 1.0; g_fovLocked = 1; }
+    if (GetAsyncKeyState(VK_F3) & 0x8000) { g_offY -= 1.0; g_fovLocked = 1; g_cfgDirty = 1; }
+    if (GetAsyncKeyState(VK_F4) & 0x8000) { g_offY += 1.0; g_fovLocked = 1; g_cfgDirty = 1; }
+    if (GetAsyncKeyState(VK_F5) & 0x8000) { g_offX -= 1.0; g_fovLocked = 1; g_cfgDirty = 1; }
+    if (GetAsyncKeyState(VK_F6) & 0x8000) { g_offX += 1.0; g_fovLocked = 1; g_cfgDirty = 1; }
+    {
+        static int n7 = 0;
+        int c7 = (GetAsyncKeyState(VK_F7) & 0x8000) ? 1 : 0;
+        if (c7 && !n7) g_nadeOn = !g_nadeOn;
+        n7 = c7;
+    }
+    if (g_cfgDirty && GetTickCount() - g_cfgSaveAt > 800) { SaveConfig(); g_cfgDirty = 0; g_cfgSaveAt = GetTickCount(); }
+    if (GetAsyncKeyState(VK_F8)  & 0x8000) { if (g_nadeV > 100) g_nadeV -= 10; }
+    if (GetAsyncKeyState(VK_F9)  & 0x8000) { g_nadeV += 10; }
+    if (GetAsyncKeyState(VK_F10) & 0x8000) { if (g_nadeG > 100) g_nadeG -= 10; }
+    if (GetAsyncKeyState(VK_F11) & 0x8000) { g_nadeG += 10; }
+}
+
+
+/* ---- SkyNade ??? ----
+ * ???????? t=4s????????
+ * ????"??????"?????????? 4 ??
+ *   ??: D = v0 * cos(theta) * t
+ *   ??: dh = v0 * sin(theta) * t - 0.5 * g * t^2
+ * ?????? theta = acos(D / (v0*t))
+ * ???? = v0*t = 1300*4 = 5200 ?? ? 99 ???????
+ *
+ * Apex ????: fz = -sin(pitch) ? ???? pitch ???
+ */
+static void DrawNadeTraj(HDC dc, int w, int h)
+{
+    const double PI = 3.14159265358979;
+    const double RAD2DEG = 180.0 / PI;
+    double bx = g_feed.cam[0], by = g_feed.cam[1], bz = g_feed.cam[2];
+    double yawNow = g_feed.ang[1] * PI / 180.0;
+    double maxRange = g_nadeV * g_nadeFuse;
+    int k, best = -1;
+    double bestScore = 1e18;
+    double D2D = 0, dh = 0, cosT = 0, elevDeg = 0, gamePitch = 0, needAdjust = 0;
+    double ddx = 0, ddy = 0;
+    int ok = 0;
+    char info[200];
+    double t, dt = 0.02;
+    float lastx = 0, lasty = 0;
+    int have = 0;
+
+    /* 1) ????????????????????????? */
+    for (k = 0; k < (int)g_feed.count && k < FEED_MAX_ENT; k++) {
+        double ex = g_feed.ent[k][0] - bx;
+        double ey = g_feed.ent[k][1] - by;
+        double ez = g_feed.ent[k][2] - bz;
+        double dist = sqrt(ex*ex + ey*ey + ez*ez);
+        float sx, sy;
+        double score;
+        if (dist < 1.0 || dist > maxRange) continue;
+        if (!WorldToScreen(g_feed.ent[k], w, h, &sx, &sy)) continue;
+        score = fabs(sx - w*0.5) + fabs(sy - h*0.5) * 0.5;
+        if (sy < 0 || sy > h) score += 5000;
+        if (score < bestScore) { bestScore = score; best = k; }
+    }
+
+    if (best >= 0) {
+        ddx = g_feed.ent[best][0] - bx;
+        ddy = g_feed.ent[best][1] - by;
+        dh  = g_feed.ent[best][2] - bz;
+        D2D = sqrt(ddx*ddx + ddy*ddy);
+        if (D2D > 1.0 && D2D <= maxRange) {
+            cosT = D2D / maxRange;
+            if (cosT > 0.0 && cosT <= 1.0) {
+                elevDeg = acos(cosT) * RAD2DEG;      /* ???????? */
+                gamePitch = -elevDeg;                /* Apex: ???? */
+                needAdjust = g_feed.ang[0] - gamePitch;
+                ok = 1;
+            }
+        }
+    }
+
+    /* 2) ???????????????????? */
+    if (ok) {
+        double yawT = atan2(ddy, ddx);
+        double p = gamePitch * PI / 180.0;
+        double vx = cos(p) * cos(yawT) * g_nadeV;
+        double vy = cos(p) * sin(yawT) * g_nadeV;
+        double vz = -sin(p) * g_nadeV;
+        HPEN pen = CreatePen(PS_SOLID, 2, RGB(255, 210, 60));
+        HPEN old = SelectObject(dc, pen);
+        SelectObject(dc, GetStockObject(NULL_BRUSH));
+
+        for (t = 0; t <= g_nadeFuse + 1e-9; t += dt) {
+            float pt[3], sx, sy;
+            pt[0] = (float)(bx + vx * t);
+            pt[1] = (float)(by + vy * t);
+            pt[2] = (float)(bz + vz * t - 0.5 * g_nadeG * t * t);
+            if (WorldToScreen(pt, w, h, &sx, &sy)) {
+                if (have) { MoveToEx(dc, (int)lastx, (int)lasty, NULL); LineTo(dc, (int)sx, (int)sy); }
+                lastx = sx; lasty = sy; have = 1;
+            } else have = 0;
+        }
+        SelectObject(dc, old);
+        DeleteObject(pen);
+    }
+
+    /* 3) ???? + ???? */
+    if (best >= 0) {
+        float sx, sy;
+        if (WorldToScreen(g_feed.ent[best], w, h, &sx, &sy)) {
+            HPEN p2 = CreatePen(PS_SOLID, 2, RGB(255, 70, 70));
+            HPEN o2 = SelectObject(dc, p2);
+            SelectObject(dc, GetStockObject(NULL_BRUSH));
+            Ellipse(dc, (int)sx - 10, (int)sy - 10, (int)sx + 10, (int)sy + 10);
+            MoveToEx(dc, (int)sx - 16, (int)sy, NULL); LineTo(dc, (int)sx + 16, (int)sy);
+            MoveToEx(dc, (int)sx, (int)sy - 16, NULL); LineTo(dc, (int)sx, (int)sy + 16);
+            SelectObject(dc, o2);
+            DeleteObject(p2);
+
+            if (ok) {
+                const char* hint = (needAdjust > 3) ? " ?" : ((needAdjust < -3) ? " ?" : " OK");
+                _snprintf_s(info, sizeof(info), _TRUNCATE,
+                            "SkyNade  D=%.0fm  pitch=%.1f  now=%.1f%s  (%.0f)",
+                            D2D * 0.01905, gamePitch, g_feed.ang[0], hint, needAdjust);
+                SetTextColor(dc, (fabs(needAdjust) < 3) ? RGB(80, 255, 80) : RGB(255, 210, 60));
+            } else {
+                _snprintf_s(info, sizeof(info), _TRUNCATE,
+                            "SkyNade  D=%.0fm  OUT OF RANGE (max %.0fm)",
+                            D2D * 0.01905, maxRange * 0.01905);
+                SetTextColor(dc, RGB(255, 80, 80));
+            }
+            TextOutA(dc, (int)sx + 20, (int)sy - 8, info, (int)strlen(info));
+        }
+    }
 }
 
 static void Draw(HDC dc, int w, int h)
@@ -224,6 +374,8 @@ static void Draw(HDC dc, int w, int h)
         }
     }
     DeleteObject(pen);
+
+    if (g_nadeOn) DrawNadeTraj(dc, w, h);
 }
 
 
@@ -277,10 +429,26 @@ static void LoadConfig(void)
     if (fopen_s(&f, "C:\\ProgramData\\sc_overlay.ini", "r") != 0 || !f) return;
     while (fgets(buf, sizeof(buf), f)) {
         double v;
-        if (sscanf_s(buf, "fov=%lf", &v) == 1 && v > 20 && v < 170 && !g_fovLocked) g_fov = v;
+        if (sscanf_s(buf, "gameFov=%lf", &v) == 1 && v > 20 && v < 170 && !g_fovLocked) g_gameFov = v;
+        else if (sscanf_s(buf, "fov=%lf", &v) == 1 && v > 20 && v < 180) g_fov = v;
         else if (sscanf_s(buf, "boxH=%lf", &v) == 1 && v > 10 && v < 200) g_boxH = v;
         else if (sscanf_s(buf, "boxW=%lf", &v) == 1 && v > 0.1 && v < 2.0) g_boxW = v;
+        else if (sscanf_s(buf, "offX=%lf", &v) == 1 && v > -2000 && v < 2000) g_offX = v;
+        else if (sscanf_s(buf, "offY=%lf", &v) == 1 && v > -2000 && v < 2000) g_offY = v;
     }
+    fclose(f);
+}
+
+static void SaveConfig(void)
+{
+    FILE* f = NULL;
+    if (fopen_s(&f, "C:\\ProgramData\\sc_overlay.ini", "w") != 0 || !f) return;
+    fprintf(f, "gameFov=%.2f\n", g_gameFov);
+    fprintf(f, "fov=%.2f\n", g_fov);
+    fprintf(f, "offX=%.2f\n", g_offX);
+    fprintf(f, "offY=%.2f\n", g_offY);
+    fprintf(f, "boxH=%.2f\n", g_boxH);
+    fprintf(f, "boxW=%.3f\n", g_boxW);
     fclose(f);
 }
 

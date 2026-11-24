@@ -1368,9 +1368,33 @@ static ULONG ScanWorldPos(PEPROCESS proc, U64 arrVa, const float cam[3], float o
 
 /* cached entity addresses: rebuilt occasionally, positions refreshed every tick */
 
+
+/* ?????????????????? keep ? */
+static VOID NearestSort(U64* addr, float* dist, ULONG n, ULONG keep)
+{
+    ULONG i, j;
+    for (i = 1; i < n; i++) {
+        U64  a = addr[i];
+        float d = dist[i];
+        j = i;
+        while (j > 0 && dist[j - 1] > d) {
+            addr[j] = addr[j - 1];
+            dist[j] = dist[j - 1];
+            j--;
+        }
+        addr[j] = a;
+        dist[j] = d;
+    }
+    if (n > keep) {
+        for (i = keep; i < n; i++) { addr[i] = 0; dist[i] = 0; }
+    }
+}
+
 static VOID RebuildEntAddrs(PEPROCESS proc, U64 arrVa, const float cam[3], U64 wantVt)
 {
     PUCHAR buf = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x10000, 'rebA');
+    static U64   s_candAddr[256];
+    static float s_candDist[256];
     ULONG found = 0;
     U64 off;
     if (!buf) return;
@@ -1386,8 +1410,12 @@ static VOID RebuildEntAddrs(PEPROCESS proc, U64 arrVa, const float cam[3], U64 w
             float dx, dy, dz, d2;
             U64 vt = 0;
             if (!inst || inst < 0x10000 || (inst >> 47)) continue;
-            if (wantVt && g_espMode == 0) {
-                if (!NT_SUCCESS(MemRead(proc, inst, &vt, 8)) || vt != wantVt) continue;
+            /* ???"???"??????????????????? npc_dummie??
+             * ???????????????????????
+             * ???????????????? */
+            if (wantVt) {
+                if (!NT_SUCCESS(MemRead(proc, inst, &vt, 8)) || !vt) continue;
+                if (vt != wantVt && !(g_vtExtra && vt == g_vtExtra)) continue;
             }
             if (!NT_SUCCESS(MemRead(proc, inst + 0x978, p, 12))) continue;
             if (p[0] != p[0] || p[1] != p[1] || p[2] != p[2]) continue;
@@ -1398,10 +1426,23 @@ static VOID RebuildEntAddrs(PEPROCESS proc, U64 arrVa, const float cam[3], U64 w
             dx = p[0]-cam[0]; dy = p[1]-cam[1]; dz = p[2]-cam[2];
             d2 = dx*dx + dy*dy + dz*dz;
             if (d2 < 2500.0f || d2 > 100000000.0f) continue;
-            g_entAddr[found++] = inst;
+            if (found < 256) {
+                s_candAddr[found] = inst;
+                s_candDist[found] = d2;
+                found++;
+            }
         }
     }
-    g_entAddrCount = found;
+    NearestSort(s_candAddr, s_candDist, found, 64);
+    {
+        ULONG k2;
+        ULONG keep = found > 64 ? 64 : found;
+        g_entAddrCount = 0;
+        for (k2 = 0; k2 < keep; k2++) {
+            if (!s_candAddr[k2]) break;
+            g_entAddr[g_entAddrCount++] = s_candAddr[k2];
+        }
+    }
     ExFreePoolWithTag(buf, 'rebA');
 }
 
