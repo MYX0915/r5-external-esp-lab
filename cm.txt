@@ -1,21 +1,32 @@
-驱动修正：glow 保活改用本版本真实偏移 + 新增 loot 扫描命令
+高亮链路打通：人物轮廓实测成功
 
-重大修正 — glow 保活偏移:
-  旧: +0x294 / +0x295 / +0x29D （UC 帖子另一构建的偏移，本版本 0x294 是重力时间）
-  新: +0x2A0 contexts[0]  每 tick 维持
-      +0x2A8 focused=1    每 tick 维持
-      +0x2AC fadeDur=1.0f 每 tick 维持
-      +0x2B4 fadeParity   仅命令下发时翻转一次
+最终写入序列（本版本真实偏移）:
+  +0x2A0 contexts[0] = 样式行号（必须 postProcess=1）
+  +0x2A8 focused     = 1
+  +0x2AC fadeDuration= 1.0f（非 0，否则闸门4丢弃）
+  +0x2B4 fadeParity  ^= 1（仅切换时翻转）
 
-已实测确认（本局对 18 个玩家实体写入后）:
-  截图在集装箱顶部拍到橙色人物剪影轮廓（穿墙），颜色与 row50 的 RGB(1.0,0.1,0.0) 一致
-  改到 row2 后轮廓消失 —— 因为 row2 的 functionBits 中 postProcess=0
-  改回 row50 后恢复
-  ⇒ 高亮链路确认可用，且样式行必须 postProcess=1
+实测证据:
+  对局中对 18 个玩家实体写入 row50
+  截图 refs/aim1.png 拍到集装箱顶部透出橙色人物剪影（穿墙）
+  改为 row2 → 轮廓消失（postProcess=0）
+  改回 row50 → 恢复
+  ⇒ 双重验证，排除巧合
 
-新增 loot 命令:
-  扫描实体数组，读 +0x478 (m_iSignifierName, char*)
-  匹配 prop_survival / prop_death_box
-  输出 地址+signifier+坐标 到 C:\ProgramData\sc_loot.txt（只读，不写入）
+样式表颜色可自定义:
+  row50 = *(module+0x72BE6C0) + 50*0x34
+  +0x04/+0x08/+0x0C = RGB float
+  实测改为绿色后回读确认生效
 
-驱动产物: bin\mdump.sys 16:13:25
+失败原因回顾:
+  早期 DX11 偏移已失效
+  中期 UC 帖子偏移属于另一构建（本版本 0x294 是重力时间）
+  后期正确偏移但选了 postProcess=0 的样式行
+
+loot 现状:
+  loot 命令已实现（按 m_iSignifierName 0x478 识别 prop_survival/prop_death_box）
+  一次扫描命中 200 个（上限截断）
+  写入字段全部保持，但画面未确认（可见物品可能不在列表内）
+  减法验证证实画面上的紫/橙发光是游戏自带稀有度效果
+
+文档新增第 103 节
