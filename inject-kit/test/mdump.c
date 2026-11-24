@@ -582,7 +582,40 @@ static VOID SigScan(PEPROCESS proc, U64 arrVa, PUCHAR buf, ULONG reqId);
 static VOID DumpBones(PEPROCESS proc, U64 inst, PUCHAR buf);
 static NTSTATUS MemRead(PEPROCESS proc, U64 va, PVOID dst, SIZE_T len);
 static NTSTATUS MemWrite(PEPROCESS proc, U64 va, PVOID src, SIZE_T len);
+static VOID GlowTick(PEPROCESS proc);
+static VOID GlowParity(PEPROCESS proc);
 static VOID WriteVa(PEPROCESS proc, UCHAR* p, UCHAR* le);
+
+/* ---------------- glow keepalive (path 1: entity selector) ----------------
+ * +0x294 selector / +0x295 contexts[0] / +0x29D focusedMask ? tick ??
+ * +0x2A8 parity ???"????"???????? tick ??
+ */
+static U64   g_glowEnt = 0;
+static ULONG g_glowRow = 0;
+static ULONG g_glowOn  = 0;
+
+static VOID GlowParity(PEPROCESS proc)
+{
+    ULONG pv;
+    if (!g_glowEnt || !proc) return;
+    if (NT_SUCCESS(MemRead(proc, g_glowEnt + 0x2A8, &pv, 4))) {
+        pv ^= 1;
+        MemWrite(proc, g_glowEnt + 0x2A8, &pv, 4);
+    }
+}
+
+static VOID GlowTick(PEPROCESS proc)
+{
+    UCHAR b;
+    if (!g_glowOn || !g_glowEnt || !proc) return;
+    b = (UCHAR)(g_glowRow & 0xFF);
+    MemWrite(proc, g_glowEnt + 0x294, &b, 1);
+    MemWrite(proc, g_glowEnt + 0x295, &b, 1);
+    if (NT_SUCCESS(MemRead(proc, g_glowEnt + 0x29D, &b, 1))) {
+        b = (UCHAR)(b | 1);
+        MemWrite(proc, g_glowEnt + 0x29D, &b, 1);
+    }
+}
 
 static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN)
 {
@@ -610,7 +643,35 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                     UCHAR* le = p;
                     while (le < end && *le != '\r' && *le != '\n') le++;
                     if (le > p) {
-                        if ((p[0] == 'm' || p[0] == 'M') && (p[1] == 'o' || p[1] == 'O') && (p[2] == 'd' || p[2] == 'D')) {
+                        if ((p[0] == 'g' || p[0] == 'G') && (p[1] == 'l' || p[1] == 'L') && (p[2] == 'o' || p[2] == 'O')) {
+                            UCHAR* q4 = p;
+                            if ((q4[3] == 'w' || q4[3] == 'W') && (q4[4] == 'o' || q4[4] == 'O')) {
+                                GlowParity(proc);
+                                g_glowOn = 0; g_glowEnt = 0;
+                                K("[mdump] glowoff\n");
+                            } else {
+                                U64 gva = 0; ULONG grow = 0; UCHAR* q5 = p + 4;
+                                while (q5 < le && *q5 != ' ') q5++;
+                                while (q5 < le && *q5 == ' ') q5++;
+                                if (q5 + 1 < le && q5[0] == '0' && (q5[1] == 'x' || q5[1] == 'X')) q5 += 2;
+                                while (q5 < le) { UCHAR c = *q5; U64 d;
+                                    if (c >= '0' && c <= '9') d = c - '0';
+                                    else if ((c|0x20) >= 'a' && (c|0x20) <= 'f') d = (c|0x20) - 'a' + 10;
+                                    else break; gva = gva * 16 + d; q5++; }
+                                while (q5 < le && *q5 == ' ') q5++;
+                                while (q5 < le) { UCHAR c = *q5; ULONG d;
+                                    if (c >= '0' && c <= '9') d = c - '0';
+                                    else break; grow = grow * 10 + d; q5++; }
+                                if (gva) {
+                                    g_glowEnt = gva; g_glowRow = grow & 0xFF; g_glowOn = 1;
+                                    GlowParity(proc);            /* ?????????? */
+                                    KF("[mdump] glow on ent=0x%llX row=%lu\n", gva, g_glowRow);
+                                } else {
+                                    K("[mdump] glow: bad args\n");
+                                }
+                            }
+                        }
+                        else if ((p[0] == 'm' || p[0] == 'M') && (p[1] == 'o' || p[1] == 'O') && (p[2] == 'd' || p[2] == 'D')) {
                             UCHAR* q3 = p + 4;
                             ULONG nv = 0, seen = 0;
                             while (q3 < le) {
@@ -1136,6 +1197,7 @@ static VOID EspLoop(PEPROCESS proc0, U64 modBase0)
     KF("[mdump] esp loop start, module=0x%llX\n", modBase);
     for (;;) {
         ULONG h = 0xFFFFFFFF;
+        GlowTick(proc);
         if (!TGT_ALIVE()) {
             if (TryReattach()) { proc = g_espProc; modBase = g_modBase; continue; }
             SleepMs(1000); continue;
