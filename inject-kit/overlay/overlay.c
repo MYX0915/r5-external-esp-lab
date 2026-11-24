@@ -63,9 +63,18 @@ static double g_offX = 0.0, g_offY = 0.0;
 static int    g_fovLocked = 0;
 /* ---- SkyNade ???? ---- */
 static int    g_nadeOn   = 0;
-static double g_nadeV    = 1300.0;  /* in/s ???? */
+static double g_nadeV    = 1550.0;  /* in/s ???? */
 static double g_nadeG    = 725.0;   /* in/s? ???? */
 static double g_nadeFuse = 4.0;
+static double g_vReq      = 0;      /* ?????????????? */
+/* ---- SkyNade ???? ---- */
+static int    g_assistOn  = 1;      /* 1 = ?? Shift+?? ???? */
+static double g_pxPerDeg  = 18.18;  /* ???? / ??????? 50px ? 2.75?? */
+static double g_calPitch  = 0;      /* ??????? */
+static int    g_calPx     = 0;      /* ????????? */
+static int    g_calValid  = 0;
+static double g_stuckPitch = 0;     /* ????????????? */
+static int    g_stuckCnt   = 0;     /* ??????? */
 static double g_boxH = 72.0;
 static double g_boxW = 0.42;
 
@@ -200,75 +209,95 @@ static void PollKeys(void)
 }
 
 
-/* ---- SkyNade ??? ----
- * ???????? t=4s????????
- * ????"??????"?????????? 4 ??
- *   ??: D = v0 * cos(theta) * t
- *   ??: dh = v0 * sin(theta) * t - 0.5 * g * t^2
- * ?????? theta = acos(D / (v0*t))
- * ???? = v0*t = 1300*4 = 5200 ?? ? 99 ???????
- *
- * Apex ????: fz = -sin(pitch) ? ???? pitch ???
+/* ---- SkyNade ????? ----
+ * ???? t??? v0 ?????????
+ *   A = D / t                ????????
+ *   B = (dh + 0.5*g*t^2) / t ????????
+ *   reqV = sqrt(A^2 + B^2)   ???????
+ *   base = atan2(B, A)
+ *   phi  = acos(reqV / v0)
+ *   pitchLow  = base - phi   ??????????
+ *   pitchHigh = base + phi   ???????????SkyNade ???
+ * ???: reqV > v0 ????
  */
+typedef struct { int ok; int mode; double D; double dh; double reqV; double low; double high; double use; } NADE_SOL;
+
+static NADE_SOL SolveNade(double bx, double by, double bz, const float* tp)
+{
+    NADE_SOL r;
+    double dx = tp[0] - bx, dy = tp[1] - by;
+    double D = sqrt(dx * dx + dy * dy);
+    double dh = tp[2] - bz;
+    double halfGt2 = 0.5 * g_nadeG * g_nadeFuse * g_nadeFuse;
+    double A, B, reqV, base, cosPhi, phi;
+    RtlZeroMemory(&r, sizeof(r));
+    r.D = D; r.dh = dh;
+    if (D < 1.0) return r;
+    A = D / g_nadeFuse;
+    B = (dh + halfGt2) / g_nadeFuse;
+    reqV = sqrt(A * A + B * B);
+    r.reqV = reqV;
+    if (reqV > g_nadeV + 0.1) {
+        /* ??????????????phi=0?? base ???
+         * ????????????????????????? */
+        r.low = r.high = atan2(B, A) * 180.0 / 3.14159265358979;
+        r.mode = 3;
+        r.use = r.low;
+        r.ok = 1;
+        return r;
+    }
+    base = atan2(B, A);
+    cosPhi = reqV / g_nadeV;
+    if (cosPhi > 1.0) cosPhi = 1.0;
+    if (cosPhi < -1.0) cosPhi = -1.0;
+    phi = acos(cosPhi);
+    r.low  = (base - phi) * 180.0 / 3.14159265358979;
+    r.high = (base + phi) * 180.0 / 3.14159265358979;
+    r.ok = 1;
+    /* ?? pitch ?? ?89???????????????????? */
+    if (r.high <= 89.0)      { r.mode = 2; r.use = r.high; }
+    else if (r.low <= 89.0)  { r.mode = 1; r.use = r.low;  }
+    else                     { r.mode = 0; r.use = 0;      }
+    return r;
+}
+
 static void DrawNadeTraj(HDC dc, int w, int h)
 {
     const double PI = 3.14159265358979;
-    const double RAD2DEG = 180.0 / PI;
     double bx = g_feed.cam[0], by = g_feed.cam[1], bz = g_feed.cam[2];
-    double yawNow = g_feed.ang[1] * PI / 180.0;
-    double maxRange = g_nadeV * g_nadeFuse;
     int k, best = -1;
     double bestScore = 1e18;
-    double D2D = 0, dh = 0, cosT = 0, elevDeg = 0, gamePitch = 0, needAdjust = 0;
-    double ddx = 0, ddy = 0;
-    int ok = 0;
-    char info[200];
-    double t, dt = 0.02;
-    float lastx = 0, lasty = 0;
-    int have = 0;
+    NADE_SOL sol;
+    char info[220];
 
-    /* 1) ????????????????????????? */
+    RtlZeroMemory(&sol, sizeof(sol));
+
+    /* ???????????? */
     for (k = 0; k < (int)g_feed.count && k < FEED_MAX_ENT; k++) {
-        double ex = g_feed.ent[k][0] - bx;
-        double ey = g_feed.ent[k][1] - by;
-        double ez = g_feed.ent[k][2] - bz;
-        double dist = sqrt(ex*ex + ey*ey + ez*ez);
         float sx, sy;
         double score;
-        if (dist < 1.0 || dist > maxRange) continue;
         if (!WorldToScreen(g_feed.ent[k], w, h, &sx, &sy)) continue;
-        score = fabs(sx - w*0.5) + fabs(sy - h*0.5) * 0.5;
-        if (sy < 0 || sy > h) score += 5000;
+        score = fabs(sx - w * 0.5) + fabs(sy - h * 0.5) * 0.5;
         if (score < bestScore) { bestScore = score; best = k; }
     }
+    if (best < 0) return;
 
-    if (best >= 0) {
-        ddx = g_feed.ent[best][0] - bx;
-        ddy = g_feed.ent[best][1] - by;
-        dh  = g_feed.ent[best][2] - bz;
-        D2D = sqrt(ddx*ddx + ddy*ddy);
-        if (D2D > 1.0 && D2D <= maxRange) {
-            cosT = D2D / maxRange;
-            if (cosT > 0.0 && cosT <= 1.0) {
-                elevDeg = acos(cosT) * RAD2DEG;      /* ???????? */
-                gamePitch = -elevDeg;                /* Apex: ???? */
-                needAdjust = g_feed.ang[0] - gamePitch;
-                ok = 1;
-            }
-        }
-    }
+    sol = SolveNade(bx, by, bz, g_feed.ent[best]);
+    g_vReq = sol.reqV;
 
-    /* 2) ???????????????????? */
-    if (ok) {
-        double yawT = atan2(ddy, ddx);
-        double p = gamePitch * PI / 180.0;
+    /* ?????????? */
+    if (sol.ok) {
+        double yawT = atan2(g_feed.ent[best][1] - by, g_feed.ent[best][0] - bx);
+        double p = -sol.use * PI / 180.0;       /* Apex: ???? */
         double vx = cos(p) * cos(yawT) * g_nadeV;
         double vy = cos(p) * sin(yawT) * g_nadeV;
         double vz = -sin(p) * g_nadeV;
+        double t, dt = 0.02;
+        float lastx = 0, lasty = 0;
+        int have = 0;
         HPEN pen = CreatePen(PS_SOLID, 2, RGB(255, 210, 60));
         HPEN old = SelectObject(dc, pen);
         SelectObject(dc, GetStockObject(NULL_BRUSH));
-
         for (t = 0; t <= g_nadeFuse + 1e-9; t += dt) {
             float pt[3], sx, sy;
             pt[0] = (float)(bx + vx * t);
@@ -283,8 +312,8 @@ static void DrawNadeTraj(HDC dc, int w, int h)
         DeleteObject(pen);
     }
 
-    /* 3) ???? + ???? */
-    if (best >= 0) {
+    /* ???? + ?? */
+    {
         float sx, sy;
         if (WorldToScreen(g_feed.ent[best], w, h, &sx, &sy)) {
             HPEN p2 = CreatePen(PS_SOLID, 2, RGB(255, 70, 70));
@@ -296,16 +325,21 @@ static void DrawNadeTraj(HDC dc, int w, int h)
             SelectObject(dc, o2);
             DeleteObject(p2);
 
-            if (ok) {
-                const char* hint = (needAdjust > 3) ? " ?" : ((needAdjust < -3) ? " ?" : " OK");
+            if (sol.ok) {
+                double now = g_feed.ang[0];
+                double need = -sol.use;                  /* ????? pitch */
+                const char* hint = (now < need - 3) ? " down" : ((now > need + 3) ? " up" : " OK");
+                const char* mode = (sol.mode == 2) ? "HIGH" : ((sol.mode == 1) ? "LOW(??)" : ((sol.mode == 3) ? "MAXRANGE(????)" : "NONE"));
                 _snprintf_s(info, sizeof(info), _TRUNCATE,
-                            "SkyNade  D=%.0fm  pitch=%.1f  now=%.1f%s  (%.0f)",
-                            D2D * 0.01905, gamePitch, g_feed.ang[0], hint, needAdjust);
-                SetTextColor(dc, (fabs(needAdjust) < 3) ? RGB(80, 255, 80) : RGB(255, 210, 60));
+                            "SkyNade D=%.0fm Vreq=%.0f Vnow=%.0f [%s] need=%.1f now=%.1f%s  (H%.1f L%.1f)",
+                            sol.D * 0.01905, sol.reqV, g_nadeV, mode,
+                            need, now, hint, -sol.high, -sol.low);
+                SetTextColor(dc, (sol.mode == 3) ? RGB(255, 120, 60) : ((fabs(now - need) < 3) ? RGB(80, 255, 80) : RGB(255, 210, 60)));
             } else {
                 _snprintf_s(info, sizeof(info), _TRUNCATE,
-                            "SkyNade  D=%.0fm  OUT OF RANGE (max %.0fm)",
-                            D2D * 0.01905, maxRange * 0.01905);
+                            "SkyNade D=%.0fm  NO SOLUTION  Vreq=%.0f > Vnow=%.0f  (max %.0fm)",
+                            sol.D * 0.01905, sol.reqV, g_nadeV,
+                            sqrt(g_nadeV * g_nadeV - 0.25 * g_nadeG * g_nadeG * g_nadeFuse * g_nadeFuse) * g_nadeFuse * 0.01905);
                 SetTextColor(dc, RGB(255, 80, 80));
             }
             TextOutA(dc, (int)sx + 20, (int)sy - 8, info, (int)strlen(info));
@@ -313,9 +347,101 @@ static void DrawNadeTraj(HDC dc, int w, int h)
     }
 }
 
+/* ???? k ?????? */
+static int EntBox(int k, int w, int h, float* x0, float* y0, float* x1, float* y1)
+{
+    float feet[3], head[3], sfx, sfy, shx, shy, bh, bw;
+    if (k < 0 || k >= (int)g_feed.count || k >= FEED_MAX_ENT) return 0;
+    feet[0] = g_feed.ent[k][0];
+    feet[1] = g_feed.ent[k][1];
+    feet[2] = g_feed.ent[k][2];
+    head[0] = feet[0]; head[1] = feet[1]; head[2] = feet[2] + (float)g_boxH;
+    if (!WorldToScreen(feet, w, h, &sfx, &sfy)) return 0;
+    if (!WorldToScreen(head, w, h, &shx, &shy)) return 0;
+    bh = sfy - shy;
+    if (bh < 4 || bh > 4000) return 0;
+    bw = bh * (float)g_boxW;
+    if (bw < 6) bw = 6;
+    *x0 = sfx - bw * 0.5f; *x1 = sfx + bw * 0.5f;
+    *y0 = shy;             *y1 = sfy;
+    return 1;
+}
+
+/* ????????????
+ * Apex ???????SetCursorPos ??? warp ??????????
+ * ????? mouse_event ????????? */
+static void RecenterCursor(void)
+{
+    POINT pt;
+    int sw = GetSystemMetrics(SM_CXSCREEN);
+    int sh = GetSystemMetrics(SM_CYSCREEN);
+    if (sw <= 0 || sh <= 0) return;
+    if (!GetCursorPos(&pt)) return;
+    if (pt.x < 40 || pt.x > sw - 40 || pt.y < 40 || pt.y > sh - 40)
+        SetCursorPos(sw / 2, sh / 2);
+    else if (0) SetCursorPos(pt.x, pt.y);
+}
+
+/* SkyNade ?????????? && Shift && ?? ? ??????? */
+static void SkyNadeAssist(int w, int h)
+{
+    int k, best = -1;
+    double cx = w * 0.5, cy = h * 0.5;
+    double bx = g_feed.cam[0], by = g_feed.cam[1], bz = g_feed.cam[2];
+    double targetPitch, diff, px;
+
+    if (!g_assistOn) return;
+    if (!(GetAsyncKeyState(VK_SHIFT) & 0x8000)) return;
+    if (!(GetAsyncKeyState(VK_LBUTTON) & 0x8000)) return;
+
+    for (k = 0; k < (int)g_feed.count && k < FEED_MAX_ENT; k++) {
+        float x0, y0, x1, y1;
+        if (!EntBox(k, w, h, &x0, &y0, &x1, &y1)) continue;
+        if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) { best = k; break; }
+    }
+    if (best < 0) return;
+
+    {
+        NADE_SOL sol = SolveNade(bx, by, bz, g_feed.ent[best]);
+        if (!sol.ok || sol.mode == 0) return;
+        targetPitch = -sol.use;
+    }
+
+    diff = targetPitch - g_feed.ang[0];
+    if (fabs(diff) < 0.4) return;
+
+    if (g_calValid) {
+        double dPitch = g_feed.ang[0] - g_calPitch;
+        if (g_calPx != 0 && fabs(dPitch) > 0.05 && fabs(dPitch) < 60.0) {
+            double inst = fabs((double)g_calPx) / fabs(dPitch);
+            if (inst > 1.0 && inst < 500.0)
+                g_pxPerDeg = g_pxPerDeg * 0.85 + inst * 0.15;
+        }
+    }
+    g_calPitch = g_feed.ang[0];
+    g_calValid = 1;
+
+    /* ????????????????????? */
+    if (fabs(g_feed.ang[0] - g_stuckPitch) < 0.01) g_stuckCnt++;
+    else g_stuckCnt = 0;
+    g_stuckPitch = g_feed.ang[0];
+
+    px = diff * g_pxPerDeg;
+    {
+        double lim = (g_stuckCnt > 4) ? 60.0 : 20.0;   /* ?? 20px ???? */
+        if (px >  lim) px =  lim;
+        if (px < -lim) px = -lim;
+        if (fabs(px) < 1.0) px = (px > 0) ? 1.0 : -1.0;
+    }
+    g_calPx = (int)px;
+    mouse_event(0x0001, 0, (int)px, 0, 0);
+    RecenterCursor();
+}
+
 static void Draw(HDC dc, int w, int h)
 {
     PollKeys();
+    if (g_have && g_feed.ok) SkyNadeAssist(w, h);
     HPEN pen = CreatePen(PS_SOLID, 2, RGB(0, 255, 0));
     char buf[160];
     float sx, sy, sx2, sy2;
@@ -435,6 +561,8 @@ static void LoadConfig(void)
         else if (sscanf_s(buf, "boxW=%lf", &v) == 1 && v > 0.1 && v < 2.0) g_boxW = v;
         else if (sscanf_s(buf, "offX=%lf", &v) == 1 && v > -2000 && v < 2000) g_offX = v;
         else if (sscanf_s(buf, "offY=%lf", &v) == 1 && v > -2000 && v < 2000) g_offY = v;
+        else if (sscanf_s(buf, "pxPerDeg=%lf", &v) == 1 && v > 1 && v < 500) g_pxPerDeg = v;
+        else if (sscanf_s(buf, "assist=%lf", &v) == 1) g_assistOn = (v != 0);
     }
     fclose(f);
 }
@@ -449,6 +577,8 @@ static void SaveConfig(void)
     fprintf(f, "offY=%.2f\n", g_offY);
     fprintf(f, "boxH=%.2f\n", g_boxH);
     fprintf(f, "boxW=%.3f\n", g_boxW);
+    fprintf(f, "pxPerDeg=%.3f\n", g_pxPerDeg);
+    fprintf(f, "assist=%d\n", g_assistOn);
     fclose(f);
 }
 

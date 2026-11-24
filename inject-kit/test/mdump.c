@@ -387,8 +387,13 @@ static ULONG CollectRegions(PEPROCESS proc, REG* out, ULONG max, U64 minSz, U64 
 #define RVA_LOCAL_HANDLE 0x3D3DCD0ULL
 #define RVA_ENTITY_ARRAY 0x6B515D8ULL
 #define RVA_HIGHLIGHT_GLOBAL 0x72BE6C0ULL
+/* npc_dummie ???????????????????????:
+ *   ?? 0x7FF78F520000 ? ?? 0x7FF792609330  ? 0x30E9330
+ *   ?? 0x7FF6ECD60000 ? ?? 0x7FF6EFE49330  ? 0x30E9330 */
+#define RVA_VT_NPC_DUMMIE 0x30E9330ULL
 static U64 modBaseForNpc = 0;
 static U64 g_vtExtra = 0;   /* ???????????? npc_dummie? */
+static ULONG g_vtManual = 0; /* vt2 ??????????? */
 
 /* one-shot closed loop for NPC hunting:
    read the entity array, pick N instances, dump them, sleep 2s, dump them again.
@@ -899,7 +904,7 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                                     else if ((c|0x20) >= 'a' && (c|0x20) <= 'f') d = (c|0x20) - 'a' + 10;
                                     else break; vv = vv * 16 + d; qv++; sv = TRUE; }
                             }
-                            if (sv) { g_vtExtra = vv; KF("[mdump] vt2 set 0x%llX\n", vv); }
+                            if (sv) { g_vtExtra = vv; g_vtManual = 1; KF("[mdump] vt2 set 0x%llX (manual)\n", vv); }
                             else K("[mdump] vt2: bad args\n");
                         }
                         else if ((p[0] == 'a' || p[0] == 'A') && (p[1] == 'r' || p[1] == 'R') && (p[2] == 'r' || p[2] == 'R')) {
@@ -1570,6 +1575,10 @@ static BOOLEAN TryReattach(void)
     if (g_espProc) ObDereferenceObject(g_espProc);
     g_espProc = np;
     g_modBase = nb;
+    if (!g_vtManual) {
+        g_vtExtra = nb + RVA_VT_NPC_DUMMIE;
+        KF("[mdump] vtExtra reattach = 0x%llX\n", g_vtExtra);
+    }
     KF("[mdump] reattached pid=%lu base=0x%llX\n", pid, nb);
     return TRUE;
 }
@@ -1694,6 +1703,10 @@ static VOID Waiter(PVOID ctx)
         }
         KF("[mdump] resident, module=0x%llX\n", modBase);
         modBaseForNpc = modBase;
+        if (modBase && !g_vtManual) {
+            g_vtExtra = modBase + RVA_VT_NPC_DUMMIE;
+            KF("[mdump] vtExtra auto = 0x%llX\n", g_vtExtra);
+        }
         g_espProc = proc;
         if (modBase) {
             U64 nt = 0; ULONG nsec, so, i;
