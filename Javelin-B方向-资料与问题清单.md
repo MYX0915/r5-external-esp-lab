@@ -5147,3 +5147,111 @@ team==97 的实体 4 个，其中 2 个是真假人（hp=100/100, sh=125/125）
    → 已有 NameLen 判断，为空时不绘制
 3. 假人依旧无原生描边（渲染队列限制，与字段无关）
 ```
+
+---
+
+## 109. 社区与开源资料汇总（2026-11-25 02:0x）
+
+### 109.1 核心结论：没有现成方案
+
+```
+DX12 版本的 ItemManager / 渲染队列过滤
+两者都没有可直接使用的完整开源仓库
+UC 论坛有大量逆向笔记、结构体、旧版本代码，可作为 IDA 静态分析的线索
+```
+
+### 109.2 DX12 Highlight / 渲染队列（假人描边）
+
+| 资料 | 内容 | 对我们的意义 |
+|---|---|---|
+| UC《[DX12] Apex Legends Highlight System - Structure Analysis & Glow Activation》 | 我们当前 `+0x2A0 / +0x2A8 / +0x2AC / fadeParity` 与样式表的原始来源 | 已完整吸收（见第 102/103 节） |
+| UC《Apex glow on dummies》(2024) | 旧 DX11 成功给 npc_dummie 开 glow；识别 signifier + team==97 + 写上下文 | **DX12 后渲染收集重写，同一段代码失效** |
+| UC《Apex Reversal, Structs and Offsets》 | 持续维护的偏移汇总 | 可对照验证字段 |
+
+GitHub 参考：
+```
+dtzdev/offsets        全套偏移清单，含 highlight / viewmatrix / entitylist
+ekdms05/ApexDumps     旧版 SDK dump，含 DT_HighlightSettings 类定义（仅参考结构思想）
+```
+
+**社区共识**：
+
+```
+DX12 把假人硬编码在渲染收集的 if 分支里过滤掉
+旧版写实体高亮标记可绕过；DX12 必须
+  ① Hook 渲染收集函数，或
+  ② APC 劫持渲染线程
+纯外部内存读写已无法绕过队列过滤
+
+靶场红轮廓属独立 Debug 渲染管线，不在 HighlightManager 体系内
+```
+
+⇒ 与我们第 103.6 / 107 节的实测结论完全一致。
+
+### 109.3 Loot / ItemManager 地面道具坐标
+
+**现状**：GitHub 几乎没有公开仓库实现新版正式服 ItemManager 外部 Loot ESP。
+
+R5Reloaded（私服）有公开源码，但**布局与正式服不同，offset 不可直接套用，仅参考思路**。
+
+UC 讨论统一结论：
+
+```
+❌ prop_survival 实体本身不携带顶层 worldPos
+   （与我们第 104 节的批量 dump 失败吻合）
+✅ 地面道具的真实坐标存储在全局 ItemManager 的 Item 实例数组中
+   Item 实例内含：worldPos、itemTier、itemDef 索引
+   外部驱动只需读该数组即可绘制 loot overlay
+⚠ 难点：没有公开的最新正式服 ItemManager 全局指针与结构体
+   必须 IDA 静态追溯引用链找到 ItemManager 基址
+```
+
+GitHub 参考：
+```
+1tsMeMario/R5Reloaded-External   外部 ESP，ImGui overlay + 实体枚举 + Loot 绘制
+                                 架构与 r5-external-esp-lab 高度相似，可参考代码组织
+```
+
+### 109.4 手雷 SkyNade 抛物线
+
+UC 关键词：`Apex skynade frag projectile solve`
+
+```
+逻辑：固定引信时间 4 秒，给定玩家位置与目标位置，解斜抛仰角
+开源代码大量存在，少量仓库集成了外部 Overlay 弹道绘制
+可复用我们已有的玩家/目标 worldPos
+```
+
+### 109.5 对我们仓库的工程参考价值
+
+```
+1. 人物 ESP / overlay 绘制 / 实体枚举
+   → 参考 1tsMeMario/R5Reloaded-External 的 ImGui 绘制与实体过滤组织方式
+2. Highlight / Glow
+   → UC DX12 Highlight 帖子即当前方案的原始文档（已吸收）
+3. Loot 攻坚路线（社区公认）
+   → 放弃 prop_survival 盲扫
+   → IDA 静态反查全局 ItemManager，追溯引用链找 Item 数组基址
+   → 拿到后直接读坐标绘制 Overlay
+4. 渲染队列注入
+   → 社区没有现成的外部驱动 APC 实现
+   → 属前沿实验内容，需自行逆向渲染收集函数
+```
+
+### 109.6 检索关键词清单
+
+```
+Apex DX12 Highlight System ModelInstance filter
+Apex glow on dummies dx12
+Apex ItemManager loot external esp
+Apex skynade projectile source
+R5Reloaded external esp loot
+```
+
+### 109.7 优先级判断（据本节资料）
+
+| 任务 | 可行性 | 建议 |
+|---|---|---|
+| SkyNade 弹道绘制 | 高，纯数学 + 现有坐标 | **可立即做** |
+| Loot ESP（IDA 反查 ItemManager） | 中，需 IDA | 阶段性投入 |
+| 假人原生描边 | 低，外部驱动无法 Hook | 需要内核级 APC，长期 |

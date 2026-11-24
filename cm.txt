@@ -1,0 +1,28 @@
+归档社区与开源资料汇总（UC + GitHub）
+
+核心结论:
+  DX12 的 ItemManager 与渲染队列过滤
+  两者都没有可直接使用的完整开源仓库
+  UC 有大量逆向笔记可作 IDA 分析的线索
+
+Highlight / 渲染队列:
+  UC DX12 Highlight 帖子即我们当前方案的原始来源（已吸收）
+  UC「Apex glow on dummies」(2024): DX11 可行，DX12 渲染收集重写后失效
+  社区共识: DX12 把假人硬编码在渲染收集 if 分支过滤
+            必须 Hook 渲染收集函数 或 APC 劫持渲染线程
+            纯外部内存读写无法绕过
+  靶场红轮廓属独立 Debug 渲染管线，不在 HighlightManager 体系内
+  ⇒ 与我们第 103 / 107 节实测结论一致
+
+Loot / ItemManager:
+  prop_survival 不携带顶层 worldPos（与第 104 节吻合）
+  真实坐标在全局 ItemManager 的 Item 实例数组
+  没有公开的最新正式服指针与结构体，需 IDA 静态追溯引用链
+  R5Reloaded 源码仅参考思路，offset 不可套用
+
+SkyNade:
+  固定引信 4 秒斜抛求解，代码开源
+  可复用已有 worldPos，属可立即实现的功能
+
+新增检索关键词清单
+文档新增第 109 节
