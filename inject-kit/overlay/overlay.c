@@ -66,7 +66,9 @@ static int    g_nadeOn   = 0;
 static double g_nadeV    = 1550.0;  /* in/s ???? */
 static double g_nadeG    = 725.0;   /* in/s? ???? */
 static double g_nadeFuse = 4.0;
-static double g_vReq      = 0;      /* ?????????????? */
+static double g_vReq      = 0;
+static int    g_nadeTarget = -1;
+static int    g_latch      = -1;   /* ? Shift+?? ??????? */      /* ?????????????? */
 /* ---- SkyNade ???? ---- */
 static int    g_assistOn  = 1;      /* 1 = ?? Shift+?? ???? */
 static double g_pxPerDeg  = 18.18;  /* ???? / ??????? 50px ? 2.75?? */
@@ -272,15 +274,9 @@ static void DrawNadeTraj(HDC dc, int w, int h)
 
     RtlZeroMemory(&sol, sizeof(sol));
 
-    /* ???????????? */
-    for (k = 0; k < (int)g_feed.count && k < FEED_MAX_ENT; k++) {
-        float sx, sy;
-        double score;
-        if (!WorldToScreen(g_feed.ent[k], w, h, &sx, &sy)) continue;
-        score = fabs(sx - w * 0.5) + fabs(sy - h * 0.5) * 0.5;
-        if (score < bestScore) { bestScore = score; best = k; }
-    }
+    best = PickTarget(w, h);
     if (best < 0) return;
+    g_nadeTarget = best;
 
     sol = SolveNade(bx, by, bz, g_feed.ent[best]);
     g_vReq = sol.reqV;
@@ -382,6 +378,25 @@ static void RecenterCursor(void)
     else if (0) SetCursorPos(pt.x, pt.y);
 }
 
+/* ???????????????????????260px ??????????? */
+static int PickTarget(int w, int h)
+{
+    int k, best = -1;
+    double cx = w * 0.5, cy = h * 0.5;
+    double bestDist = 1e18;
+    for (k = 0; k < (int)g_feed.count && k < FEED_MAX_ENT; k++) {
+        float x0, y0, x1, y1;
+        double bx, by, d;
+        if (!EntBox(k, w, h, &x0, &y0, &x1, &y1)) continue;
+        if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) return k;
+        bx = (x0 + x1) * 0.5; by = (y0 + y1) * 0.5;
+        d = sqrt((bx - cx) * (bx - cx) + (by - cy) * (by - cy));
+        if (d < bestDist) { bestDist = d; best = k; }
+    }
+    if (best >= 0 && bestDist > 400.0) return -1;
+    return best;
+}
+
 /* SkyNade ?????????? && Shift && ?? ? ??????? */
 static void SkyNadeAssist(int w, int h)
 {
@@ -391,15 +406,13 @@ static void SkyNadeAssist(int w, int h)
     double targetPitch, diff, px;
 
     if (!g_assistOn) return;
-    if (!(GetAsyncKeyState(VK_SHIFT) & 0x8000)) return;
-    if (!(GetAsyncKeyState(VK_LBUTTON) & 0x8000)) return;
-
-    for (k = 0; k < (int)g_feed.count && k < FEED_MAX_ENT; k++) {
-        float x0, y0, x1, y1;
-        if (!EntBox(k, w, h, &x0, &y0, &x1, &y1)) continue;
-        if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) { best = k; break; }
+    if (!(GetAsyncKeyState(VK_SHIFT) & 0x8000) || !(GetAsyncKeyState(VK_LBUTTON) & 0x8000)) {
+        g_latch = -1;                        /* ????? */
+        return;
     }
-    if (best < 0) return;
+    if (g_latch < 0) g_latch = PickTarget(w, h);   /* ?????? */
+    best = g_latch;
+    if (best < 0 || best >= (int)g_feed.count) return;
 
     {
         NADE_SOL sol = SolveNade(bx, by, bz, g_feed.ent[best]);
@@ -421,14 +434,10 @@ static void SkyNadeAssist(int w, int h)
     g_calPitch = g_feed.ang[0];
     g_calValid = 1;
 
-    /* ????????????????????? */
-    if (fabs(g_feed.ang[0] - g_stuckPitch) < 0.01) g_stuckCnt++;
-    else g_stuckCnt = 0;
-    g_stuckPitch = g_feed.ang[0];
-
     px = diff * g_pxPerDeg;
     {
-        double lim = (g_stuckCnt > 4) ? 60.0 : 20.0;   /* ?? 20px ???? */
+        /* ???????????????60px ? 3.3 ?/? */
+        double lim = 60.0;
         if (px >  lim) px =  lim;
         if (px < -lim) px = -lim;
         if (fabs(px) < 1.0) px = (px > 0) ? 1.0 : -1.0;
