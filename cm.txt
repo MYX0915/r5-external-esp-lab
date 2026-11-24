@@ -1,29 +1,31 @@
-描边路径最终结论 + m_scriptName 类名识别
+公开资料交叉印证与架构补全
 
-驱动保活验证成功:
-  新增 glow/glowoff 命令，EspLoop 每 tick 维持 +0x294/+0x295/+0x29D
-  +0x2A8 仅在命令下发时翻转一次（遵循"变更事件"语义，避免振荡）
-  实测: selector=50 ctx0=50 mask=0x19 parity=1 连续三次采样稳定
-  ⇒ 驱动 tick 保活可完全对抗引擎每帧回写
+逐条对照（全部一致）:
+  +0x294 被 netvar 回写          ↔ 社区: 必须内核 tick 保活
+  保活后无轮廓                   ↔ 社区: Entity 配置只是样式参数，
+                                        渲染另需收集候选 ModelInstance 列表
+  训练场 npc_dummie 无效          ↔ 社区: 训练场 NPC 不进高亮队列，
+                                        原生 glow 只对对局 Player 生效
+  loot 坐标全偏移找不到            ↔ 社区: loot 由 ItemManager 单独维护，
+                                        不在 CEntityList，坐标偏移不同且懒加载
 
-但画面仍无轮廓:
-  假人(npc_dummie) 与 bot(同玩家类虚表) 均无效果
-  +0x33C（静态分析的闸门1）写不进去，引擎重置为 0x900
+loot 架构澄清:
+  CEntityList → 玩家/NPC/静态 Actor（我们遍历的 939 个）
+  ItemManager → 拾取物品，独立管理器，结构体布局不同
+  ⇒ 扫描不到身边护盾电池属预期现象，非扫描缺陷
+  ⇒ 若要 loot，需先定位 ItemManager 全局指针
 
-根因:
-  收集层(渲染子系统) 决定哪些 ModelInstance 进入每帧 u16 索引队列
-  配置层(Entity netvar) 决定进入队列后用哪套颜色
-  训练场实体在收集阶段被剪枝 → 走不到 0x2017E50
-  ⇒ 收集队列是入场门票，selector 只是上色参数
+公开资料边界:
+  ✅ Entity selector 字段 / netvar 回写 / 驱动保活方案
+  ❌ 栈 u16 索引队列填充函数
+  ❌ 索引注入方法
+  ❌ ModelInstance 渲染表遍历实现
+  ⇒ 队列注入属未公开私有分支，只能静态分析
 
-意外收获：m_scriptName 解决类名识别
-  实体 +0x590 是内联字符串（不是指针），绕开 RTTI 混淆
-  "npc_dummie" / "vending_machine" / "fr_target_flip" 等
-  全量扫描 939 实体，221 个有名字，无 weapon/loot 类
-  ⇒ 训练场枪架上的武器是关卡道具，无脚本名，"用武器验证"不可行
+驱动保活对照:
+  公开伪代码用 InterlockedWrite8/Or8/Xor8
+  我们当前用 MmCopyVirtualMemory（非原子）
+  parity 语义一致（仅切换时翻转一次）、维持字段一致
+  差异: +0x29D 读-改-写有理论竞态，实测未观察到异常
 
-下一轮入口:
-  逆向 0x226CDE0 / 0x226D800，定位 rsp+0x2090 的填充函数
-  目标：把目标 ModelInstance 的 u16 索引追加进队列
-
-文档新增第 98 节
+文档新增第 99 节

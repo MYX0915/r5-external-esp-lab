@@ -4271,3 +4271,82 @@ glow <实体> <row>   高亮保活（每 tick 维持 +0x294/+0x295/+0x29D）
 glowoff             停止保活
 +0x590              m_scriptName 内联字符串，可用于实体分类
 ```
+
+---
+
+## 99. 公开资料交叉印证与架构补全（2026-11-24 14:0x）
+
+### 99.1 实测与公开资料逐条对照
+
+| 我们的实测结论 | 公开资料 | 一致性 |
+|---|---|---|
+| `+0x294` 写入后 400ms 内被改回 | netvar 每帧回写，必须内核驱动 tick 保活 | ✅ 完全一致 |
+| 驱动保活后字段稳定但无轮廓 | Entity 配置只是样式参数；渲染管线另需收集候选 ModelInstance 列表 | ✅ 完全一致 |
+| 训练场 `npc_dummie` 无效 | 训练场 NPC 默认不进高亮候选队列，原生 glow 只对对局 Player 生效 | ✅ 完全一致 |
+| `+0x33C` 写不进去 | 该对象不在高亮系统管理范围 | ✅ 一致 |
+| **loot 坐标全偏移找不到** | **loot 不由 CEntityList 管理，ItemManager 单独维护，结构体布局不同** | ✅ 解释了现象 |
+
+### 99.2 loot 架构澄清（重要）
+
+```
+CEntityList     → 玩家、NPC、静态 Actor（我们遍历的 939 个实体）
+ItemManager     → 拾取物品列表，独立管理器
+                  loot 不是完整 CEntity，结构体布局不同
+                  坐标偏移不是 +0x978
+                  懒加载：远离视野时坐标字段为空
+```
+
+⇒ 我们扫描 939 个实体（含全偏移浮点三元组搜索）找不到身边 5 米内的护盾电池，
+**属于预期现象，不是扫描代码的缺陷**。
+
+若要处理 loot，需先定位 ItemManager 全局指针并遍历物品数组。
+
+### 99.3 公开资料的边界
+
+| 内容 | 是否公开 |
+|---|---|
+| Entity selector 字段、netvar 回写问题、驱动 tick 保活方案 | ✅ 完整公开 |
+| 栈上 u16 索引队列的填充函数 | ❌ 无公开代码 |
+| 如何把自定义 ModelInstance 索引插入队列 | ❌ 无公开代码 |
+| ModelInstance 渲染表遍历实现 | ❌ 无公开代码 |
+
+> 结论：**队列注入属于未公开私有分支**，只能靠静态汇编分析补齐。
+> 公开仓库（Echo-Apex-External / ayypex / offset dumper 等）全部止步于
+> overlay 2D 框 + overlay 骨骼，没有任何一个实现 DX12 原生引擎轮廓。
+
+### 99.4 驱动保活实现对照
+
+公开伪代码与我们已实现版本的差异：
+
+| 项目 | 公开伪代码 | 我们的实现 |
+|---|---|---|
+| 原子性 | `InterlockedWrite8/Or8/Xor8` | 普通 `MmCopyVirtualMemory` 写 |
+| parity | 仅切换时 `Xor8` 一次 | 仅命令下发时翻转一次 ✅ 语义一致 |
+| tick 来源 | 内核定时器回调 | `EspLoop` 循环 ✅ 等效 |
+| 维持字段 | `+0x294/+0x295/+0x29D` | 同上 ✅ 一致 |
+
+差异点：我们的写入非原子。在 `+0x29D` 的读-改-写上有理论竞态，
+如需加固可改为单字节原子操作。当前实测未观察到异常。
+
+### 99.5 后续两个独立方向
+
+```
+方向 1（描边彻底方案）：队列注入
+  逆向 rsp+0x2090 的填充函数（0x226CDE0 / 0x226D800 一族）
+  把目标 ModelInstance 的 u16 索引追加进队列
+  无公开参考，纯静态分析
+
+方向 2（loot ESP）：ItemManager
+  定位 ItemManager 全局指针
+  遍历物品数组（布局与 CEntity 不同）
+  同样无公开现成偏移
+```
+
+### 99.6 检索关键词（后续补充资料用）
+
+```
+Apex dx12 highlight render table modelinstance index queue
+Apex item manager loot entity reversal
+Apex render collect modelinstance per frame stack array
+respawn engine highlight collection filter
+```
