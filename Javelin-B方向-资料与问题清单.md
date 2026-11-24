@@ -3555,3 +3555,72 @@ scdump 文件总数          2804
 4. 无法区分"读取失败"与"真实零值"，因此不能据此判断实体是否释放
 
 **后续**：先修复采集链路（同步取址与读取 + 状态记录），再重做实验。
+
+---
+
+## 91. 采集链路修复：dump 状态元数据（2026-11-24 08:5x）
+
+### 91.1 参考实现的启示
+
+查 `memcpyy/R5Apex-UserMode` 的 `Driver.hpp`：
+- 每次操作走 `SendRequest`，返回 bool
+- `OperationData.Memory` 结构里带 `Size` 与 `ReturnLength`（请求长度 vs 实际长度分离）
+- 失败时打印错误，不静默吞掉
+- 上层 `Read<T>()` 失败返回 `T{}` 但仍报告
+
+对照我们的驱动：`DumpRegionToFile` 失败时只留零，**不向上层报告任何信息**。
+
+### 91.2 修复内容（已编译 08:57:58）
+
+`DumpRegionToFile` 现在为每个 dump 生成一个 **`.meta` 侧车文件**：
+
+```
+<dump>.bin.meta
+
+#!/ mdump meta
+va=0x3AF1AAE0 len=0x2000
+#chunk_off status got want
+0x0 0x0 65536 65536
+0x10000 0xC000000D 0 65536
+...
+#summary wrote=0x2000 ok=2 bad=1 firstBadOff=0x10000 verdict=PARTIAL
+```
+
+字段含义：
+
+| 字段 | 含义 |
+|---|---|
+| `va` / `len` | 请求地址 / 请求长度 |
+| 每行 `chunk_off status got want` | 该 chunk 的偏移、NTSTATUS、实际读取字节、请求字节 |
+| `ok` / `bad` | 成功 / 失败 chunk 数 |
+| `firstBadOff` | 首个失败 chunk 的偏移（0xFFFFFFFF = 全成功） |
+| `verdict` | `COMPLETE` / `PARTIAL` / `FAILED` |
+
+### 91.3 判定规则（取代"全零启发式"）
+
+| requested | got | status | 判定 |
+|---|---|---|---|
+| 256 | 256 | 0 | **完整读取**（内容全零 = 有效零值候选） |
+| 256 | 128 | 0 | 部分读取 |
+| 256 | 0 | ≠0 | 读取失败 |
+| — | — | — | `verdict=FAILED` 的样本一律丢弃 |
+
+**不再用"文件内容全零"推断读取失败**——那是 89.3 节临时采用的启发式，
+现在以 `status` 与 `got` 为准。
+
+### 91.4 配套分析工具
+
+`inject-kit/analysis/meta_check.py`
+
+```
+python meta_check.py C:\ProgramData\scdump           # 统计 COMPLETE/PARTIAL/FAILED
+python meta_check.py C:\ProgramData\scdump --valid   # 只列出 COMPLETE 的样本
+```
+
+差分前必须先跑此工具，只保留 `verdict=COMPLETE` 的样本参与比较。
+
+### 91.5 仍未解决
+
+- **时间一致性**：地址导出（`wl`）与读取之间仍有窗口。
+  下一版可加 `idump <index> <size>`：驱动自己从数组取指针并立即 dump，消除窗口。
+- 本轮 `.meta` 方案尚未在游戏进程中验证（需重新映射驱动）。

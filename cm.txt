@@ -1,32 +1,22 @@
-实验质量核查：本轮样本判定为 INVALID_SAMPLE / TIMING_INCONSISTENCY
+采集链路修复：dump 状态元数据 + 判定规则取代"全零启发式"
 
-方法学修正:
-  此前把"全零 dump"解释为"实体已释放"属于推断跳跃
-  全零可能来自读取失败/缓冲区初始化/错误地址等
+参考 memcpyy/R5Apex-UserMode Driver.hpp 的做法:
+  每次操作有明确状态往返，Size 与 ReturnLength 分离，失败不静默
 
-驱动源码确认:
-  DumpRegionToFile 失败分支注释 "page not readable: keep zeros, keep going"
-  → 读取失败不报错、照常写文件、文件不携带错误标识
-  → 单看文件无法区分"读取失败"与"真实零值"
-  → 必须配合 p 探针 status 判定（0x8000000D = STATUS_PARTIAL_COPY）
+驱动修改（bin\mdump.sys 08:57:58）:
+  DumpRegionToFile 为每个 dump 生成 .meta 侧车文件
+  内容: va/len/每 chunk 的 {offset, NTSTATUS, got, want}/summary
+  summary 含 ok/bad 计数、firstBadOff、verdict(COMPLETE|PARTIAL|FAILED)
 
-样本统计:
-  文件总数 2804，有效 1049，全零 1753，整体有效率 37.4%
-  08:48-08:53 窗口: 有效 155 / 全零 308，有效率 33.5%
-  按分钟分布显示失败集中在"批量 dump 缓存地址"场景
+判定规则:
+  不再用"文件全零"推断读取失败
+  改以 status 与 got 为准:
+    完整读取 / 部分读取 / 读取失败 三态区分
 
-本轮判定:
-  08:48-08:53 全部差分样本标记 INVALID_SAMPLE
-  near_ref 两个文件全零无效
-  far_ref 仅一个部分有效，但无法与 A 轮配对
-  由这些样本推导的高亮字段不采信
+配套工具:
+  analysis/meta_check.py
+    统计 verdict 分布；--valid 只列出 COMPLETE 样本
+  差分前必须先跑，仅保留 COMPLETE 样本
 
-采集规范（写入文档 89.5）:
-  记录地址导出时间/读取起止时间
-  读取后立即用 p 探针核验 status
-  全零样本单独标记不参与差分
-  统计并报告有效率
-  原始 dump 只增不覆盖
-
-文档新增第 89、90 节
-偏移分析暂停，先修复采集链路
+文档新增第 91 节
+遗留: 地址导出与读取的时间窗仍未消除（建议后续加 idump 命令）

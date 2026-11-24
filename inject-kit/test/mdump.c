@@ -93,7 +93,9 @@ static VOID WriteFileAt(PCWSTR path, PVOID buf, ULONG len)
 static ULONG DumpRegionToFile(PEPROCESS proc, U64 va, ULONG len, PUCHAR buf, PCWSTR path)
 {
     UNICODE_STRING p; OBJECT_ATTRIBUTES oa; IO_STATUS_BLOCK io; HANDLE h;
-    ULONG done_total = 0;
+    UNICODE_STRING mp; OBJECT_ATTRIBUTES moa; IO_STATUS_BLOCK mio; HANDLE mh = NULL;
+    WCHAR metaPath[160];
+    ULONG done_total = 0, okChunks = 0, badChunks = 0, firstBad = 0xFFFFFFFF;
 
     if (len > REGION_CAP) len = REGION_CAP;
     RtlInitUnicodeString(&p, path);
@@ -102,19 +104,67 @@ static ULONG DumpRegionToFile(PEPROCESS proc, U64 va, ULONG len, PUCHAR buf, PCW
                                  FILE_SHARE_READ, FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0)))
         return 0;
 
+    /* ---- sidecar status file: <path>.meta ---- */
+    {
+        ULONG i = 0;
+        while (path[i] && i < 140) { metaPath[i] = path[i]; i++; }
+        metaPath[i++] = L'.'; metaPath[i++] = L'm'; metaPath[i++] = L'e';
+        metaPath[i++] = L't'; metaPath[i++] = L'a'; metaPath[i] = 0;
+        RtlInitUnicodeString(&mp, metaPath);
+        InitializeObjectAttributes(&moa, &mp, OBJ_CASE_INSENSITIVE | OBJ_KERNEL_HANDLE, NULL, NULL);
+        if (!NT_SUCCESS(ZwCreateFile(&mh, GENERIC_WRITE | SYNCHRONIZE, &moa, &mio, NULL, FILE_ATTRIBUTE_NORMAL,
+                                     FILE_SHARE_READ, FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT, NULL, 0)))
+            mh = NULL;
+        if (mh) {
+            CHAR* hdr = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x200, 'dpMH');
+            if (hdr) {
+                CHAR* w = AppendFmt(hdr, hdr + 0x200,
+                    "#!/ mdump meta\nva=0x%llX len=0x%X\n#chunk_off status got want\n", va, len);
+                ZwWriteFile(mh, NULL, NULL, NULL, &mio, hdr, (ULONG)(w - hdr), NULL, NULL);
+                ExFreePoolWithTag(hdr, 'dpMH');
+            }
+        }
+    }
+
     while (done_total < len) {
         ULONG chunk = len - done_total;
         SIZE_T got = 0;
+        NTSTATUS st;
         if (chunk > 0x10000) chunk = 0x10000;      /* 64KB steps: one bad page never kills the range */
         RtlZeroMemory(buf, chunk);
-        if (!NT_SUCCESS(MmCopyVirtualMemory(proc, (PVOID)(ULONG_PTR)(va + done_total), PsGetCurrentProcess(),
-                                            buf, chunk, KernelMode, &got)) || got != chunk) {
-            /* page not readable: keep zeros, keep going */
-            chunk = (ULONG)min(chunk, 0x10000u);
+        st = MmCopyVirtualMemory(proc, (PVOID)(ULONG_PTR)(va + done_total), PsGetCurrentProcess(),
+                                 buf, chunk, KernelMode, &got);
+        if (!NT_SUCCESS(st) || got != chunk) {
+            /* keep zeros in the data file, but record the truth in the meta sidecar */
+            badChunks++;
+            if (firstBad == 0xFFFFFFFF) firstBad = done_total;
+        } else {
+            okChunks++;
+        }
+        if (mh) {
+            CHAR* ln = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x100, 'dpML');
+            if (ln) {
+                CHAR* w = AppendFmt(ln, ln + 0x100, "0x%X 0x%X %lu %lu\n",
+                                    done_total, st, (ULONG)got, chunk);
+                ZwWriteFile(mh, NULL, NULL, NULL, &mio, ln, (ULONG)(w - ln), NULL, NULL);
+                ExFreePoolWithTag(ln, 'dpML');
+            }
         }
         if (!NT_SUCCESS(ZwWriteFile(h, NULL, NULL, NULL, &io, buf, chunk, NULL, NULL)))
             break;
         done_total += chunk;
+    }
+    if (mh) {
+        CHAR* sum = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x200, 'dpMS');
+        if (sum) {
+            CHAR* w = AppendFmt(sum, sum + 0x200,
+                "#summary wrote=0x%X ok=%lu bad=%lu firstBadOff=0x%X verdict=%s\n",
+                done_total, okChunks, badChunks, firstBad,
+                (badChunks == 0) ? "COMPLETE" : (okChunks ? "PARTIAL" : "FAILED"));
+            ZwWriteFile(mh, NULL, NULL, NULL, &mio, sum, (ULONG)(w - sum), NULL, NULL);
+            ExFreePoolWithTag(sum, 'dpMS');
+        }
+        ZwClose(mh);
     }
     ZwClose(h);
     return done_total;
