@@ -1,32 +1,34 @@
-训练场实体分类图谱 + loot 定位再尝试（全部失败）
+人物完整 ESP 落地：血条/护甲/名字/距离 全部实测通过
 
-实体 signifier 全量枚举（878 个实体）:
-  (无) 341 / prop_survival 239 / prop_dynamic 93 / prop_loot_grabber 36
-  prop_door 27 / zipline_end 22 / zipline 20 / breachable_glass 19
-  weaponx 10 / info_target_clientside 9 / ambient_generic 8
-  trigger_slip 7 / npc_dummie 5 / 其它若干
-  共 30 种签名串
+功能清单:
+  包围框 / 距离文本 / 玩家名 / 血条 / 护甲条 / 多虚表白名单
 
-arrscan 结果:
-  三种步长各 40 候选
-  加入"条目间必须有变化"判据后仅剩 3 个，且均为常量或矩阵片段
-  ⇒ 没有真正的坐标数组
+字段偏移（本版本实测，假人与玩家完全一致）:
+  m_shieldHealth     0x18C   假人实测 125
+  m_shieldHealthMax  0x190   125
+  m_iHealth          0x330   100
+  m_iMaxHealth       0x470   100
+  m_iTeamNum         0x340   97（假人特征值）
+  m_lifeState        0x698   0
+  m_iName            0x481   "dynamic_dummie"（内联 ASCII）
 
-各类实体坐标扫描全部失败:
-  prop_survival ×200     无距玩家 7.6m 内坐标
-  weaponx ×10            仅局部偏移 (-177.7,-7.6,0)
-  prop_loot_grabber ×36  常量 (-136.1,0,0)
-  单个 prop_survival 64KB 145 候选，最近 25.7 米
-  内部 78 个指针一层追踪  无坐标
+FEED 协议 v4:
+  结构总长 1312 字节
+  Ent 从 0x40 开始（Inst 8 字节对齐）
+  Info 从 0x160 开始，每项 40 字节
+    Hp/HpMax/Sh/ShMax(4xULONG) + Team/Life/NameLen/Flags(4xUCHAR) + Name[20]
 
-结论:
-  本版本实体世界坐标不在头部、不在浅层指针、不在连续数组
-  仅 +0x978 对玩家类有效
-  物品坐标大概率由 ItemManager 或更深组件维护
+优化：每实体只读一次
+  从 +0x18C 读 0x520 字节，覆盖 0x18C~0x69C 全部字段
+  避免 7 次拷贝拖慢 16ms tick
 
-下一步选项:
-  1. 二层指针追踪
-  2. 静态搜索引用 +0x478 的代码，反查 ItemManager
-  3. 转回人物 ESP 完善（描边已通，可做血量/护甲/名字）
+新增 vt2 命令（多虚表白名单）:
+  默认 mode 1 收录全部实体，不加过滤会把血条画到道具上
+  vt2 注册假人虚表后，假人与真人共用同一套字段读取
 
-文档新增第 107 节
+假人识别: team == 97
+
+已知可改进:
+  距离文本重叠、空名字、假人仍无原生描边（队列限制）
+
+文档新增第 108 节

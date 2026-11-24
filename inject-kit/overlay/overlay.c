@@ -8,6 +8,17 @@
 #define FEED_PATH L"C:\\ProgramData\\sc_feed.bin"
 
 #define FEED_MAX_ENT 24
+typedef struct _EINFO {
+    unsigned int  hp;
+    unsigned int  hpMax;
+    unsigned int  sh;
+    unsigned int  shMax;
+    unsigned char team;
+    unsigned char life;
+    unsigned char nameLen;
+    unsigned char flags;
+    char          name[20];
+} EINFO;
 typedef struct _FEED {
     unsigned int  magic;
     unsigned int  version;
@@ -18,7 +29,10 @@ typedef struct _FEED {
     unsigned int  ok;
     unsigned long long inst;
     float ent[FEED_MAX_ENT][3];
+    EINFO info[FEED_MAX_ENT];
 } FEED;
+
+static void DrawBars(HDC dc, int k, int x0, int y0, int bh, int wid);
 
 static HWND  g_overlay, g_game;
 static FEED  g_feed;
@@ -202,6 +216,7 @@ static void Draw(HDC dc, int w, int h)
                         Rectangle(dc, (int)(s1 - wid / 2), (int)s4, (int)(s1 + wid / 2), (int)s2);
                         _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%.0fm", meters);
                         TextOutA(dc, (int)(s1 - wid / 2), (int)s4 - 15, buf, (int)strlen(buf));
+                        DrawBars(dc, (int)k, (int)(s1 - wid / 2), (int)s4, (int)hgt, (int)wid);
                     }
                 }
             }
@@ -209,6 +224,50 @@ static void Draw(HDC dc, int w, int h)
         }
     }
     DeleteObject(pen);
+}
+
+
+/* ?? / ??? / ?? */
+static void DrawBars(HDC dc, int k, int x0, int y0, int bh, int wid)
+{
+    const EINFO* inf;
+    int bx;
+    if (k < 0 || k >= FEED_MAX_ENT) return;
+    inf = &g_feed.info[k];
+    if (!inf->flags || bh < 8) return;
+    bx = x0 - 7;
+
+    if (inf->hpMax > 0 && inf->hpMax < 10000) {
+        double f = (double)inf->hp / (double)inf->hpMax;
+        RECT r;
+        HBRUSH bg, hb;
+        if (f > 1.0) f = 1.0; if (f < 0.0) f = 0.0;
+        bg = CreateSolidBrush(RGB(25, 25, 25));
+        r.left = bx; r.right = bx + 4; r.top = y0; r.bottom = y0 + bh;
+        FillRect(dc, &r, bg); DeleteObject(bg);
+        hb = CreateSolidBrush(RGB(70, 210, 70));
+        r.left = bx; r.right = bx + 4;
+        r.top = y0 + (int)(bh * (1.0 - f)); r.bottom = y0 + bh;
+        FillRect(dc, &r, hb); DeleteObject(hb);
+    }
+    if (inf->shMax > 0 && inf->shMax < 10000) {
+        double f = (double)inf->sh / (double)inf->shMax;
+        RECT r;
+        HBRUSH bg, sb;
+        if (f > 1.0) f = 1.0; if (f < 0.0) f = 0.0;
+        bg = CreateSolidBrush(RGB(25, 25, 25));
+        r.left = bx + 5; r.right = bx + 9; r.top = y0; r.bottom = y0 + bh;
+        FillRect(dc, &r, bg); DeleteObject(bg);
+        sb = CreateSolidBrush(RGB(80, 160, 255));
+        r.left = bx + 5; r.right = bx + 9;
+        r.top = y0 + (int)(bh * (1.0 - f)); r.bottom = y0 + bh;
+        FillRect(dc, &r, sb); DeleteObject(sb);
+    }
+    if (inf->nameLen > 0 && inf->nameLen < 20) {
+        SetTextColor(dc, RGB(230, 230, 230));
+        TextOutA(dc, x0, y0 - 30, inf->name, inf->nameLen);
+    }
+    (void)wid;
 }
 
 static void LoadConfig(void)

@@ -388,6 +388,7 @@ static ULONG CollectRegions(PEPROCESS proc, REG* out, ULONG max, U64 minSz, U64 
 #define RVA_ENTITY_ARRAY 0x6B515D8ULL
 #define RVA_HIGHLIGHT_GLOBAL 0x72BE6C0ULL
 static U64 modBaseForNpc = 0;
+static U64 g_vtExtra = 0;   /* ???????????? npc_dummie? */
 
 /* one-shot closed loop for NPC hunting:
    read the entity array, pick N instances, dump them, sleep 2s, dump them again.
@@ -887,7 +888,21 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                     UCHAR* le = p;
                     while (le < end && *le != '\r' && *le != '\n') le++;
                     if (le > p) {
-                        if ((p[0] == 'a' || p[0] == 'A') && (p[1] == 'r' || p[1] == 'R') && (p[2] == 'r' || p[2] == 'R')) {
+                        if ((p[0] == 'v' || p[0] == 'V') && (p[1] == 't' || p[1] == 'T') && p[2] == '2') {
+                            const UCHAR* qv = p + 3;
+                            U64 vv = 0; BOOLEAN sv = FALSE;
+                            while (qv < le && *qv == ' ') qv++;
+                            if (qv + 1 < le && qv[0] == '0' && (qv[1] == 'x' || qv[1] == 'X')) {
+                                qv += 2;
+                                while (qv < le) { UCHAR c = *qv; ULONG d;
+                                    if (c >= '0' && c <= '9') d = c - '0';
+                                    else if ((c|0x20) >= 'a' && (c|0x20) <= 'f') d = (c|0x20) - 'a' + 10;
+                                    else break; vv = vv * 16 + d; qv++; sv = TRUE; }
+                            }
+                            if (sv) { g_vtExtra = vv; KF("[mdump] vt2 set 0x%llX\n", vv); }
+                            else K("[mdump] vt2: bad args\n");
+                        }
+                        else if ((p[0] == 'a' || p[0] == 'A') && (p[1] == 'r' || p[1] == 'R') && (p[2] == 'r' || p[2] == 'R')) {
                             const UCHAR* qa = p + 7;   /* "arrscan" = 7 chars */
                             ULONG st = 0, mn = 0; BOOLEAN s1 = FALSE, s2 = FALSE;
                             while (qa < le && *qa == ' ') qa++;
@@ -1134,9 +1149,21 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
 /* ---------- ESP: publish camera/player state to a feed file every 16ms ---------- */
 #define FEED_FILE L"\\??\\C:\\ProgramData\\sc_feed.bin"
 
+typedef struct _EINFO {
+    ULONG Hp;
+    ULONG HpMax;
+    ULONG Sh;
+    ULONG ShMax;
+    UCHAR Team;
+    UCHAR Life;
+    UCHAR NameLen;
+    UCHAR Flags;
+    CHAR  Name[20];
+} EINFO;   /* 36 ?? */
+
 typedef struct _FEED {
     ULONG Magic;        /* 'FEED' */
-    ULONG Version;      /* 3 */
+    ULONG Version;      /* 4 */
     float Cam[3];
     float Ang[3];
     float Pos[3];
@@ -1144,6 +1171,7 @@ typedef struct _FEED {
     ULONG Ok;
     U64   Inst;
     float Ent[FEED_MAX_ENT][3];
+    EINFO Info[FEED_MAX_ENT];
 } FEED;
 
 #define ENT_STRIDE       0x20ULL
@@ -1377,12 +1405,13 @@ static VOID RebuildEntAddrs(PEPROCESS proc, U64 arrVa, const float cam[3], U64 w
     ExFreePoolWithTag(buf, 'rebA');
 }
 
-static ULONG RefreshEntPositions(PEPROCESS proc, const float cam[3], float out[][3], ULONG max)
+static ULONG RefreshEntPositions(PEPROCESS proc, const float cam[3], float out[][3], EINFO* info, ULONG max, U64 wantVt)
 {
     ULONG i, n = 0;
     for (i = 0; i < g_entAddrCount && n < max; i++) {
         float p[3];
         float dx, dy, dz;
+        UCHAR blk[0x520];
         if (!NT_SUCCESS(MemRead(proc, g_entAddr[i] + 0x978, p, 12))) continue;
         if (p[0] != p[0] || p[1] != p[1] || p[2] != p[2]) continue;
         if (p[0] < -40000.0f || p[0] > 40000.0f) continue;
@@ -1390,7 +1419,39 @@ static ULONG RefreshEntPositions(PEPROCESS proc, const float cam[3], float out[]
         if (p[2] < -40000.0f || p[2] > 40000.0f) continue;
         dx = p[0]-cam[0]; dy = p[1]-cam[1]; dz = p[2]-cam[2];
         if (dx*dx + dy*dy + dz*dz < 2500.0f) continue;
-        out[n][0] = p[0]; out[n][1] = p[1]; out[n][2] = p[2]; n++;
+        out[n][0] = p[0]; out[n][1] = p[1]; out[n][2] = p[2];
+        /* ??? 0x520 ???????????+0x18C ~ +0x69C? */
+        RtlZeroMemory(info[n].Name, sizeof(info[n].Name));
+        info[n].Hp = info[n].HpMax = info[n].Sh = info[n].ShMax = 0;
+        info[n].Team = 0; info[n].Life = 0; info[n].NameLen = 0; info[n].Flags = 0;
+        {
+            U64 vt = 0;
+            BOOLEAN isPlayer = FALSE;
+            if (NT_SUCCESS(MemRead(proc, g_entAddr[i], &vt, 8)) && vt) {
+                if (wantVt && vt == wantVt) isPlayer = TRUE;
+                if (g_vtExtra && vt == g_vtExtra) isPlayer = TRUE;
+            }
+            if (isPlayer && NT_SUCCESS(MemRead(proc, g_entAddr[i] + 0x18C, blk, sizeof(blk)))) {
+            info[n].Sh    = *(ULONG*)(blk + 0x000);   /* +0x18C m_shieldHealth */
+            info[n].ShMax = *(ULONG*)(blk + 0x004);   /* +0x190 m_shieldHealthMax */
+            info[n].Hp    = *(ULONG*)(blk + 0x1A4);   /* +0x330 m_iHealth */
+            info[n].HpMax = *(ULONG*)(blk + 0x2E4);   /* +0x470 m_iMaxHealth */
+            info[n].Team  = *(UCHAR*)(blk + 0x1B4);   /* +0x340 m_iTeamNum */
+            info[n].Life  = *(UCHAR*)(blk + 0x50C);   /* +0x698 m_lifeState */
+            {
+                ULONG k;
+                for (k = 0; k < sizeof(info[n].Name) - 1; k++) {
+                    UCHAR c = *(UCHAR*)(blk + 0x2F5 + k);   /* +0x481 m_iName */
+                    if (c < 32 || c > 126) break;
+                    info[n].Name[k] = (CHAR)c;
+                    info[n].NameLen++;
+                }
+                info[n].Name[info[n].NameLen] = 0;
+            }
+                info[n].Flags = 1;
+            }
+        }
+        n++;
     }
     return n;
 }
@@ -1515,12 +1576,12 @@ static VOID EspLoop(PEPROCESS proc0, U64 modBase0)
         }
         if (f.Ok) {
             static float s_ent[FEED_MAX_ENT][3];
+            U64 lvt = 0;
+            if (f.Inst) MemRead(proc, f.Inst, &lvt, 8);
             if ((tick % 120) == 0) {
-                U64 lvt = 0;
-                if (f.Inst) MemRead(proc, f.Inst, &lvt, 8);
                 RebuildEntAddrs(proc, modBase + RVA_ENTITY_ARRAY, f.Cam, lvt);
             }
-            g_entCount = RefreshEntPositions(proc, f.Cam, s_ent, FEED_MAX_ENT);
+            g_entCount = RefreshEntPositions(proc, f.Cam, s_ent, f.Info, FEED_MAX_ENT, lvt);
             RtlCopyMemory(g_entList, s_ent, sizeof(s_ent));
         }
         f.Count = g_entCount;
