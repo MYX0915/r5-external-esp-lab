@@ -595,6 +595,8 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
     static ULONG hb = 0;
 
     for (;;) {
+        /* sync target process each iteration (g_espProc changes on reattach) */
+        if (g_espProc && g_espProc != proc) { proc = g_espProc; KF("[mdump] req proc sync 0x%llX\n", (U64)(ULONG_PTR)proc); }
         if (!TGT_ALIVE()) { SleepMs(500); continue; }
         if (FilePresent(REQ_FILE)) {
             ULONG len = 0;

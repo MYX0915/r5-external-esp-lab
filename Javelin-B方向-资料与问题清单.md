@@ -3624,3 +3624,84 @@ python meta_check.py C:\ProgramData\scdump --valid   # 只列出 COMPLETE 的样
 - **时间一致性**：地址导出（`wl`）与读取之间仍有窗口。
   下一版可加 `idump <index> <size>`：驱动自己从数组取指针并立即 dump，消除窗口。
 - 本轮 `.meta` 方案尚未在游戏进程中验证（需重新映射驱动）。
+
+---
+
+## 92. 采集链路修复验证通过（2026-11-24 11:4x）
+
+### 92.1 关键 BUG：请求处理持有过期进程
+
+`EspLoop` 有重连逻辑：
+
+```c
+if (TryReattach()) { proc = g_espProc; modBase = g_modBase; continue; }
+```
+
+但 `ServeRequests(PEPROCESS proc, ...)` 的 `proc` 是 **DriverEntry 时固定的**，
+游戏重启后仍指向已退出的旧进程 → **所有 dump / 探针 / 写入全部返回 `0x8000000D`**。
+
+现象特征（极易误判）：
+- ESP 正常（feed 有数据）
+- 但任何按地址的读取都失败
+- 连模块基址都读不了
+
+### 92.2 修复
+
+```c
+for (;;) {
+    /* sync target process each iteration (g_espProc changes on reattach) */
+    if (g_espProc && g_espProc != proc) { proc = g_espProc; ... }
+    if (!TGT_ALIVE()) { SleepMs(500); continue; }
+    ...
+}
+```
+
+效果：游戏重开多少次，只要不重启电脑，驱动自动跟随新 pid，无需重新映射。
+
+### 92.3 验证结果
+
+```
+[mdump] reattached pid=11580 base=0x7FF65B750000
+[mdump] probe 0x12B847480 status=0x00000000 got=64 first8=E8 00 B9 A4 F7 7F 00 00
+```
+
+`first8` = `0x7FF7A4B900E8`，是有效虚表指针 → 读取正常。
+
+`.meta` 正负例：
+
+| 地址 | status | got/want | verdict |
+|---|---|---|---|
+| `0x12B847480`（有效，自身实体） | `0x0` | 4096/4096 | **COMPLETE** |
+| `0x100000`（实际已映射） | `0x0` | 1024/1024 | **COMPLETE** |
+| `0x7FFF00000000`（未映射） | `0x8000000D` | 0/1024 | **FAILED** |
+
+注意：`0x100000` 在游戏进程内是有效映射，不能当作"无效地址"用例。
+真正未映射要靠高位地址（如 `0x7FFF00000000`）。
+
+`meta_check.py` 统计正确：COMPLETE 2 / FAILED 3（共 5）。
+
+### 92.4 重要运维结论：kdmapper 无法卸载
+
+```
+每次映射都会在内核留下一个永久实例（无服务项，无法卸载）
+判断方法: 日志中 "=== entry ===" 的次数 = 当前驻留实例数
+实例数 > 1 时: 请求被随机实例消费
+  → 旧实例可能先删掉请求文件再失败，新实例根本看不到
+  → 表现为"新功能不生效"，极易误判为代码 bug
+```
+
+本次因此两次重启电脑。规范：
+
+```
+改驱动前先看 entry 次数
+多次映射后必须重启，再映射一次
+```
+
+### 92.5 已知遗留问题
+
+**dump 文件名会跨驱动重载冲突**
+
+文件名格式 `%lu_%llX.bin`（请求序号_地址），请求序号每次驱动加载从 1 重新计，
+所以重启后 `1_xxx.bin` 会覆盖重启前的同名文件，违反"原始数据只增不覆盖"。
+
+修复建议：文件名加入驱动加载批次标识（如加载时的 tick 或随机 nonce 前缀）。

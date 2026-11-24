@@ -1,22 +1,31 @@
-采集链路修复：dump 状态元数据 + 判定规则取代"全零启发式"
+采集链路修复验证通过：请求处理持有过期进程的 BUG
 
-参考 memcpyy/R5Apex-UserMode Driver.hpp 的做法:
-  每次操作有明确状态往返，Size 与 ReturnLength 分离，失败不静默
+关键 BUG:
+  EspLoop 有重连逻辑并更新本地 proc
+  但 ServeRequests(PEPROCESS proc, ...) 的 proc 在 DriverEntry 时固定
+  游戏重启后仍指向已退出进程
+  → 所有 dump/探针/写入返回 0x8000000D
+  → 而 ESP 正常，极易误判为代码 bug
 
-驱动修改（bin\mdump.sys 08:57:58）:
-  DumpRegionToFile 为每个 dump 生成 .meta 侧车文件
-  内容: va/len/每 chunk 的 {offset, NTSTATUS, got, want}/summary
-  summary 含 ok/bad 计数、firstBadOff、verdict(COMPLETE|PARTIAL|FAILED)
+修复:
+  ServeRequests 循环内每次请求前同步:
+    if (g_espProc && g_espProc != proc) proc = g_espProc;
+  效果: 游戏重开无需重新映射驱动
 
-判定规则:
-  不再用"文件全零"推断读取失败
-  改以 status 与 got 为准:
-    完整读取 / 部分读取 / 读取失败 三态区分
+验证:
+  probe 0x12B847480 status=0x0 first8=0x7FF7A4B900E8（有效虚表）
+  .meta 正例: 0x12B847480 → COMPLETE, got 4096/4096
+  .meta 负例: 0x7FFF00000000 → FAILED, status=0x8000000D, got 0/1024
+  meta_check.py 统计正确
 
-配套工具:
-  analysis/meta_check.py
-    统计 verdict 分布；--valid 只列出 COMPLETE 样本
-  差分前必须先跑，仅保留 COMPLETE 样本
+运维结论:
+  kdmapper 映射的驱动无法卸载，重复映射会累积实例
+  实例数 > 1 时请求被随机消费，旧实例可能先删请求再失败
+  表现为"新功能不生效"，本次因此两次重启
+  规范: 改驱动前先看 "=== entry ===" 次数，多次映射后必须重启
 
-文档新增第 91 节
-遗留: 地址导出与读取的时间窗仍未消除（建议后续加 idump 命令）
+遗留:
+  dump 文件名跨驱动重载冲突（请求序号从 1 重计，覆盖旧样本）
+  建议加入加载批次标识
+
+文档新增第 92 节
