@@ -63,7 +63,7 @@ static double g_offX = 0.0, g_offY = 0.0;
 static int    g_fovLocked = 0;
 /* ---- SkyNade ???? ---- */
 static int    g_nadeOn   = 0;
-static double g_nadeV    = 1550.0;  /* in/s ???? */
+static double g_nadeV    = 1490.0;  /* in/s ???? */
 static double g_nadeG    = 725.0;   /* in/s? ???? */
 static double g_nadeFuse = 4.0;
 static double g_vReq      = 0;
@@ -222,7 +222,7 @@ static void PollKeys(void)
  *   pitchHigh = base + phi   ???????????SkyNade ???
  * ???: reqV > v0 ????
  */
-typedef struct { int ok; int mode; double D; double dh; double reqV; double low; double high; double use; } NADE_SOL;
+typedef struct { int ok; int mode; double D; double dh; double reqV; double low; double high; double use; double miss; } NADE_SOL;
 
 static NADE_SOL SolveNade(double bx, double by, double bz, const float* tp)
 {
@@ -245,6 +245,7 @@ static NADE_SOL SolveNade(double bx, double by, double bz, const float* tp)
         r.low = r.high = atan2(B, A) * 180.0 / 3.14159265358979;
         r.mode = 3;
         r.use = r.low;
+        r.miss = (reqV - g_nadeV) * g_nadeFuse * 0.01905;
         r.ok = 1;
         return r;
     }
@@ -256,10 +257,11 @@ static NADE_SOL SolveNade(double bx, double by, double bz, const float* tp)
     r.low  = (base - phi) * 180.0 / 3.14159265358979;
     r.high = (base + phi) * 180.0 / 3.14159265358979;
     r.ok = 1;
-    /* ?? pitch ?? ?89???????????????????? */
-    if (r.high <= 89.0)      { r.mode = 2; r.use = r.high; }
-    else if (r.low <= 89.0)  { r.mode = 1; r.use = r.low;  }
-    else                     { r.mode = 0; r.use = 0;      }
+    /* ???? ? ??????????????????????????
+     * ? base ?????? = (reqV - v0) * t????????? */
+    r.use  = base * 180.0 / 3.14159265358979;
+    r.miss = (reqV - g_nadeV) * g_nadeFuse * 0.01905;   /* ???=????=??? */
+    r.mode = (r.use <= 89.0) ? 2 : 0;
     return r;
 }
 
@@ -325,11 +327,10 @@ static void DrawNadeTraj(HDC dc, int w, int h)
                 double now = g_feed.ang[0];
                 double need = -sol.use;                  /* ????? pitch */
                 const char* hint = (now < need - 3) ? " down" : ((now > need + 3) ? " up" : " OK");
-                const char* mode = (sol.mode == 2) ? "HIGH" : ((sol.mode == 1) ? "LOW(??)" : ((sol.mode == 3) ? "MAXRANGE(????)" : "NONE"));
                 _snprintf_s(info, sizeof(info), _TRUNCATE,
-                            "SkyNade D=%.0fm Vreq=%.0f Vnow=%.0f [%s] need=%.1f now=%.1f%s  (H%.1f L%.1f)",
-                            sol.D * 0.01905, sol.reqV, g_nadeV, mode,
-                            need, now, hint, -sol.high, -sol.low);
+                            "SkyNade D=%.0fm Vreq=%.0f Vnow=%.0f need=%.1f now=%.1f%s miss=%+.1fm(+?/-?)",
+                            sol.D * 0.01905, sol.reqV, g_nadeV,
+                            need, now, hint, sol.miss);
                 SetTextColor(dc, (sol.mode == 3) ? RGB(255, 120, 60) : ((fabs(now - need) < 3) ? RGB(80, 255, 80) : RGB(255, 210, 60)));
             } else {
                 _snprintf_s(info, sizeof(info), _TRUNCATE,
