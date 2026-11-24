@@ -63,7 +63,7 @@ static double g_offX = 0.0, g_offY = 0.0;
 static int    g_fovLocked = 0;
 /* ---- SkyNade ???? ---- */
 static int    g_nadeOn   = 0;
-static double g_nadeV    = 1490.0;  /* in/s ???? */
+static double g_nadeV    = 1500.0;  /* in/s ???? */
 static double g_nadeG    = 725.0;   /* in/s? ???? */
 static double g_nadeFuse = 4.0;
 static double g_vReq      = 0;
