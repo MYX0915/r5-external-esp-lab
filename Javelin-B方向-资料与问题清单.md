@@ -4948,3 +4948,84 @@ arrscan <stride> <minCount>
 2. glow 保活的 +0x2A8 写入用 4 字节，公开伪代码用 1 字节（等效，但可统一）
 3. 请求通道会丢请求：多条必须打包进一次请求（已知，脚本已规避）
 ```
+
+---
+
+## 107. 训练场实体分类图谱与 loot 定位再尝试（2026-11-24 21:0x）
+
+### 107.1 实体 signifier 全量枚举
+
+通过 `+0x478`（m_iSignifierName，char*）枚举 878 个实体的类型：
+
+```
+(无 signifier)              341
+prop_survival               239   ← 地面补给（我们此前只匹配这个）
+prop_dynamic                 93
+prop_loot_grabber            36   ← 拾取点
+prop_door                    27
+zipline_end                  22
+zipline                      20
+breachable_glass             19
+weaponx                      10   ← 地面武器
+info_target_clientside        9
+ambient_generic               8
+trigger_slip                  7
+npc_dummie                    5
+其它（prop_script / viewmodel / sky_camera / vortex_sphere 等）
+```
+
+完整签名串列表（30 种）：
+```
+prop_script, weaponx, trigger_slip, trigger_hurt, viewmodel, info_target,
+sky_camera, ziprail, prop_dynamic, zipline, zipline_end,
+trigger_no_object_placement, info_target_clientside, breachable_glass,
+trigger_out_of_bounds, info_particle_system, predicted_first_person_proxy,
+first_person_proxy, player_waypoint, breachable_glass_manager,
+prop_loot_grabber, viewmodel_attachment_model, ambient_generic,
+trigger_cylinder_heavy, titan_cockpit, vortex_sphere, prop_door,
+prop_arsenal, prop_survival, npc_dummie
+```
+
+### 107.2 arrscan 结构形态匹配结果
+
+三种步长各扫出 40 个候选，加入「条目间必须有变化」判据后：
+
+```
+完美一致但为常量：0x282FECE0 / 0x282FD380（−297.4,0,0 每条相同）
+矩阵片段形态：    0xB9B5C0 / 0xB9B5D0（首分量恒为 1.0）
+```
+
+⇒ **没有一个是真正的坐标数组**。
+
+### 107.3 各类实体的坐标扫描（全部失败）
+
+| 目标 | 数量 | 前 0x400~0x10000 内结果 |
+|---|---|---|
+| prop_survival | 200（批量） | 无距玩家 7.6 米内的坐标 |
+| weaponx | 10 | 仅局部偏移 `(-177.7,-7.6,0)` |
+| prop_loot_grabber | 36 | 常量 `(-136.1,0,0)` |
+| 单个 prop_survival 64KB | 1 | 145 个候选，最近 25.7 米 |
+| prop_survival 内部指针（78 个） | 1 | 一层子对象无坐标 |
+
+### 107.4 结论
+
+```
+本版本实体的世界坐标：
+  ✗ 不在实体头部（+0x0 ~ +0x10000）
+  ✗ 不在浅层指针子对象
+  ✗ 不在可识别的连续数组中
+  ✓ 已知仅 +0x978 对"玩家类"实体有效
+```
+
+物品坐标大概率由 **ItemManager** 或更深层组件维护，需要新的切入点。
+
+### 107.5 下一步可选方向
+
+```
+1. 对 prop_survival / weaponx 做二层指针追踪
+   （一层已试，二层未试；成本高，命中率未知）
+2. 在 .text 中定位读取 m_iSignifierName 的代码，反向找 ItemManager
+   现有 capstone 可做：搜索引用 +0x478 的指令，找其调用者与数据来源
+3. 换目标：先不做 loot 坐标，转回"人物 ESP 完善"
+   （描边已通，可继续做血量/护甲/名字等信息字段）
+```

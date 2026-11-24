@@ -1,36 +1,32 @@
-当日复盘与次日行动清单
+训练场实体分类图谱 + loot 定位再尝试（全部失败）
 
-今日里程碑:
-  完整跑通 DX12 后处理穿墙描边管线
-    +0x2A0 contexts[0] / +0x2A8 focused / +0x2AC fadeDuration != 0
-    +0x2B4 fadeParity 仅开关时翻转
-  postProcess=1 样式行才渲染剪影（row50 可用 / row2 无效）
-  glowcolor 动态改样式表 RGB
-  本版本全量偏移表归档（300KB / 192 类段）
-  heap 上限放开，hv 全堆坐标检索可用
-  loot 枚举 prop_survival
-  内存采集 37% → 100%，驱动自动重连
-  mouse_event 输入注入可用（SendInput 被拦）
-  截图验证能力
+实体 signifier 全量枚举（878 个实体）:
+  (无) 341 / prop_survival 239 / prop_dynamic 93 / prop_loot_grabber 36
+  prop_door 27 / zipline_end 22 / zipline 20 / breachable_glass 19
+  weaponx 10 / info_target_clientside 9 / ambient_generic 8
+  trigger_slip 7 / npc_dummie 5 / 其它若干
+  共 30 种签名串
 
-确认的边界:
-  prop_survival 顶层与浅层子指针均不含 loot 世界坐标
-  64KB 内候选均在 25m 外，无一对应脚下物品
-  地面物品发光为材质效果，与 Highlight 无关
-  loot 原生描边瓶颈在渲染收集过滤
+arrscan 结果:
+  三种步长各 40 候选
+  加入"条目间必须有变化"判据后仅剩 3 个，且均为常量或矩阵片段
+  ⇒ 没有真正的坐标数组
 
-次日清单:
-  暂停 prop_survival 深层指针追踪
-  转入 ItemManager 全局指针扫描
-  新增驱动命令 arrscan：按步长扫描"连续含合法世界坐标的条目数组"
-  命中即为 ItemObject 数组，输出基址 + 坐标偏移 + count
-  然后用 WorldToScreen 做 2D Overlay（名称/稀有度/距离）
+各类实体坐标扫描全部失败:
+  prop_survival ×200     无距玩家 7.6m 内坐标
+  weaponx ×10            仅局部偏移 (-177.7,-7.6,0)
+  prop_loot_grabber ×36  常量 (-136.1,0,0)
+  单个 prop_survival 64KB 145 候选，最近 25.7 米
+  内部 78 个指针一层追踪  无坐标
 
-长期独立任务:
-  队列注入（rsp+0x2090 填充函数），需 IDA/Ghidra
+结论:
+  本版本实体世界坐标不在头部、不在浅层指针、不在连续数组
+  仅 +0x978 对玩家类有效
+  物品坐标大概率由 ItemManager 或更深组件维护
 
-已知技术债:
-  内核 printf 不支持 %f → 改定点整数输出
-  请求通道会丢请求 → 多条打包
+下一步选项:
+  1. 二层指针追踪
+  2. 静态搜索引用 +0x478 的代码，反查 ItemManager
+  3. 转回人物 ESP 完善（描边已通，可做血量/护甲/名字）
 
-文档新增第 106 节
+文档新增第 107 节

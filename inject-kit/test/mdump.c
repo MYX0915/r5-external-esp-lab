@@ -588,6 +588,7 @@ static VOID GlowParity(PEPROCESS proc);
 static VOID GlowColorRow(PEPROCESS proc, U64 globalVa, ULONG row, float r, float g, float b);
 static VOID HeapValueScan(PEPROCESS proc, float tx, float ty, float tz, float rad);
 static VOID LootScan(PEPROCESS proc, U64 arrVa);
+static VOID ArrScan(PEPROCESS proc, ULONG stride, ULONG minCount);
 static VOID WriteVa(PEPROCESS proc, UCHAR* p, UCHAR* le);
 
 /* ---------------- glow keepalive (path 1: entity selector) ----------------
@@ -653,7 +654,7 @@ static VOID HeapValueScan(PEPROCESS proc, float tx, float ty, float tz, float ra
     float r2 = rad * rad;
     if (!buf || !out) { if(buf) ExFreePoolWithTag(buf,'hvSC'); if(out) ExFreePoolWithTag(out,'hvOT'); return; }
     RtlZeroMemory(out, 0x8000); w = out;
-    w = AppendFmt(w, out + 0x8000, "target=(%.2f,%.2f,%.2f) r=%.2f\n", tx, ty, tz, rad);
+    w = AppendFmt(w, out + 0x8000, "target=(%ld,%ld,%ld) r=%ld  [values x100]\n", (long)(tx*100),(long)(ty*100),(long)(tz*100),(long)(rad*100));
 
     while (addr < 0x00007FFFFFFF0000ULL && hits < 128) {
         MBINF m; SIZE_T rr = 0;
@@ -734,8 +735,8 @@ static VOID LootScan(PEPROCESS proc, U64 arrVa)
                 if (!NT_SUCCESS(MemRead(proc, inst + 0x978, pv, 12))) {
                     pv[0] = pv[1] = pv[2] = 0.0f;
                 }
-                w = AppendFmt(w, out + 0x8000, "0x%llX %s %.1f,%.1f,%.1f\n",
-                              inst, nm, pv[0], pv[1], pv[2]);
+                w = AppendFmt(w, out + 0x8000, "0x%llX %s %ld,%ld,%ld\n",
+                              inst, nm, (long)(pv[0]*100),(long)(pv[1]*100),(long)(pv[2]*100));
                 n++;
             }
         }
@@ -763,7 +764,101 @@ static VOID GlowColorRow(PEPROCESS proc, U64 globalVa, ULONG row, float r, float
     MemWrite(proc, entry + 0x04, &r, 4);
     MemWrite(proc, entry + 0x08, &g, 4);
     MemWrite(proc, entry + 0x0C, &b, 4);
-    KF("[mdump] glowcolor row=%lu rgb=(%.2f,%.2f,%.2f) entry=0x%llX\n", row, r, g, b, entry);
+    KF("[mdump] glowcolor row=%lu rgb=(%ld,%ld,%ld) entry=0x%llX [x100]\n", row, (long)(r*100),(long)(g*100),(long)(b*100), entry);
+}
+
+
+/* ---------------- arrscan: ?????? ----------------
+ * ?????"?? N ????????????????????"???
+ * ?????ItemManager ? ItemObject ???loot ???????
+ *
+ * arrscan <stride> <minCount>
+ */
+static BOOLEAN EntryHasWorldCoord(PUCHAR e, ULONG len)
+{
+    ULONG i;
+    for (i = 0; i + 12 <= len; i += 4) {
+        float* f = (float*)(e + i);
+        float ax = f[0] < 0 ? -f[0] : f[0];
+        float ay = f[1] < 0 ? -f[1] : f[1];
+        float z  = f[2];
+        if (ax > 100.0f && ax < 20000.0f &&
+            ay < 20000.0f &&
+            z  > -500.0f && z < 3000.0f)
+            return TRUE;
+    }
+    return FALSE;
+}
+
+static VOID ArrScan(PEPROCESS proc, ULONG stride, ULONG minCount)
+{
+    PUCHAR buf = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x100000, 'arrB');
+    CHAR*  out = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x4000, 'arrO');
+    CHAR*  w;
+    U64 addr = 0x10000;
+    ULONG cands = 0;
+    KAPC_STATE apc;
+
+    if (!buf || !out) { if(buf) ExFreePoolWithTag(buf,'arrB'); if(out) ExFreePoolWithTag(out,'arrO'); return; }
+    if (stride < 0x10 || stride > 0x200) stride = 0x40;
+    if (minCount < 3) minCount = 8;
+
+    RtlZeroMemory(out, 0x4000); w = out;
+    w = AppendFmt(w, out + 0x4000, "# arrscan stride=0x%X minCount=%lu\n# base run entryCount hintOffset\n", stride, minCount);
+
+    while (addr < 0x00007FFFFFFF0000ULL && cands < 40) {
+        MBINF m; SIZE_T rr = 0;
+        U64 base, sz, off;
+        ULONG run = 0; U64 runBase = 0;
+        ULONG lastHint = 0;
+        RtlZeroMemory(&m, sizeof(m));
+        KeStackAttachProcess(proc, &apc);
+        if (!NT_SUCCESS(ZwQueryVirtualMemory(NtCurrentProcess(), (PVOID)(ULONG_PTR)addr, 0, &m, sizeof(m), &rr)) || !m.Size) {
+            KeUnstackDetachProcess(&apc);
+            addr += 0x10000; continue;
+        }
+        base = (U64)m.Base; sz = m.Size;
+        KeUnstackDetachProcess(&apc);
+
+        if (m.State == 0x1000 && (m.Protect & 0xFF) == 0x04 && m.Type == 0x20000 && sz >= 0x10000) {
+            U64 limit = sz > 0x1000000ULL ? 0x1000000ULL : sz;   /* ?????? 16MB */
+            off = 0;
+            while (off + stride <= limit && cands < 40) {
+                SIZE_T got = 0;
+                ULONG chunk = 0x100000;
+                ULONG k;
+                if (off + chunk > limit) chunk = (ULONG)(limit - off);
+                if (chunk < stride) break;
+                if (NT_SUCCESS(MmCopyVirtualMemory(proc, (PVOID)(ULONG_PTR)(base + off), PsGetCurrentProcess(),
+                                                   buf, chunk, KernelMode, &got)) && got == chunk) {
+                    for (k = 0; k + stride <= chunk; k += stride) {
+                        if (EntryHasWorldCoord(buf + k, stride)) {
+                            if (run == 0) { runBase = base + off + k; lastHint = k; }
+                            run++;
+                        } else {
+                            if (run >= minCount) {
+                                w = AppendFmt(w, out + 0x4000, "0x%llX %lu %lu 0x0\n", runBase, run, run);
+                                cands++;
+                                if (cands >= 40) break;
+                            }
+                            run = 0;
+                        }
+                    }
+                }
+                if (cands >= 40) break;
+                off += chunk;
+            }
+            if (run >= minCount && cands < 40) {
+                w = AppendFmt(w, out + 0x4000, "0x%llX %lu %lu 0x0\n", runBase, run, run);
+                cands++;
+            }
+        }
+        if (sz) addr = base + sz; else addr += 0x10000;
+    }
+    WriteFileAt(L"\\??\\C:\\ProgramData\\sc_arr.txt", out, (ULONG)(w - out) + 1);
+    ExFreePoolWithTag(buf, 'arrB');
+    ExFreePoolWithTag(out, 'arrO');
+    KF("[mdump] arrscan done stride=0x%X cands=%lu\n", stride, cands);
 }
 
 static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN)
@@ -792,7 +887,31 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                     UCHAR* le = p;
                     while (le < end && *le != '\r' && *le != '\n') le++;
                     if (le > p) {
-                        if ((p[0] == 'g' || p[0] == 'G') && (p[1] == 'l' || p[1] == 'L') && (p[2] == 'o' || p[2] == 'O') && (p[3] == 'w' || p[3] == 'W') && (p[4] == 'c' || p[4] == 'C')) {
+                        if ((p[0] == 'a' || p[0] == 'A') && (p[1] == 'r' || p[1] == 'R') && (p[2] == 'r' || p[2] == 'R')) {
+                            const UCHAR* qa = p + 7;   /* "arrscan" = 7 chars */
+                            ULONG st = 0, mn = 0; BOOLEAN s1 = FALSE, s2 = FALSE;
+                            while (qa < le && *qa == ' ') qa++;
+                            if (qa + 1 < le && qa[0] == '0' && (qa[1] == 'x' || qa[1] == 'X')) {
+                                qa += 2;
+                                while (qa < le) { UCHAR c = *qa; ULONG d;
+                                    if (c >= '0' && c <= '9') d = c - '0';
+                                    else if ((c|0x20) >= 'a' && (c|0x20) <= 'f') d = (c|0x20) - 'a' + 10;
+                                    else break; st = st * 16 + d; qa++; s1 = TRUE; }
+                            } else {
+                                while (qa < le) { UCHAR c = *qa;
+                                    if (c >= '0' && c <= '9') { st = st * 10 + (c - '0'); s1 = TRUE; }
+                                    else break; qa++; }
+                            }
+                            while (qa < le && *qa == ' ') qa++;
+                            while (qa < le) { UCHAR c = *qa;
+                                if (c >= '0' && c <= '9') { mn = mn * 10 + (c - '0'); s2 = TRUE; }
+                                else break; qa++; }
+                            if (s1) {
+                                KF("[mdump] arrscan start stride=0x%X min=%lu\n", st, mn ? mn : 8);
+                                ArrScan(proc, st, mn ? mn : 8);
+                            } else K("[mdump] arrscan: bad args\n");
+                        }
+                        else if ((p[0] == 'g' || p[0] == 'G') && (p[1] == 'l' || p[1] == 'L') && (p[2] == 'o' || p[2] == 'O') && (p[3] == 'w' || p[3] == 'W') && (p[4] == 'c' || p[4] == 'C')) {
                             const UCHAR* qc = p + 5;
                             ULONG row = 0; BOOLEAN seen = FALSE;
                             while (qc < le) { UCHAR c = *qc;
@@ -812,7 +931,7 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                             const UCHAR* qf = p + 3;
                             float fx = ParseF(&qf, le), fy = ParseF(&qf, le), fz = ParseF(&qf, le), fr = ParseF(&qf, le);
                             if (fr <= 0) fr = 100.0f;
-                            KF("[mdump] hv start (%.2f,%.2f,%.2f) r=%.2f\n", fx, fy, fz, fr);
+                            KF("[mdump] hv start (%ld,%ld,%ld) r=%ld [x100]\n", (long)(fx*100),(long)(fy*100),(long)(fz*100),(long)(fr*100));
                             HeapValueScan(proc, fx, fy, fz, fr);
                         }
                         else if ((p[0] == 'g' || p[0] == 'G') && (p[1] == 'l' || p[1] == 'L') && (p[2] == 'o' || p[2] == 'O')) {
