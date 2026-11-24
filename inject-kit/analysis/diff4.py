@@ -1,26 +1,23 @@
-import numpy as np, glob, os, re
-A={}; B={}
-for p in glob.glob(r"C:\ProgramData\scdump\100_h*.bin"):
-    m=re.search(r"100_(h\d+_[0-9A-F]+)\.bin", os.path.basename(p))
-    if m: A[m.group(1)]=p
-for p in glob.glob(r"C:\ProgramData\scdump\101_h*.bin"):
-    m=re.search(r"101_(h\d+_[0-9A-F]+)\.bin", os.path.basename(p))
-    if m: B[m.group(1)]=p
-print("regions:", len(set(A)&set(B)))
-found=[]; total=0
-for k in sorted(set(A)&set(B)):
-    a=np.fromfile(A[k],dtype=np.float32); b=np.fromfile(B[k],dtype=np.float32)
-    n=min(len(a),len(b)); n3=(n//3)*3
-    a=a[:n3].reshape(-1,3); b=b[:n3].reshape(-1,3)
-    ok=np.isfinite(a).all(axis=1)&np.isfinite(b).all(axis=1)
-    world=lambda m: (np.abs(m[:,0])>500)&(np.abs(m[:,0])<40000)&(np.abs(m[:,1])<40000)&(np.abs(m[:,2])<40000)
-    d=np.abs(a-b).max(axis=1)
-    m2=ok&world(a)&world(b)&(d>0.3)&(d<3000)
-    idx=np.nonzero(m2)[0]
-    total+=len(idx)
-    if len(idx):
-        found.append((len(idx),k,a[idx[0]].copy(),b[idx[0]].copy(),int(idx[0]*12)))
-found.sort(reverse=True)
-print("total moving world triples:", total)
-for c,k,va,vb,off in found[:10]:
-    print("   %-22s n=%-4d +0x%06X  (%.1f,%.1f,%.1f) -> (%.1f,%.1f,%.1f)" % (k,c,off,va[0],va[1],va[2],vb[0],vb[1],vb[2]))
+import numpy as np, glob, os, collections
+targets=[l.strip() for l in open("targets4.txt") if l.strip()]
+for a in targets:
+    hexv=a[2:]
+    fs=sorted([p for p in glob.glob(r"C:\ProgramData\scdump\*_%s.bin"%hexv) if os.path.getsize(p)==0x2000], key=lambda x: os.path.getmtime(x))[-15:]
+    if len(fs)<4: print("%s: dump %d ????" % (a,len(fs))); continue
+    data=[np.fromfile(p,dtype=np.float32) for p in fs]
+    n=min(len(d) for d in data)
+    M=np.stack([d[:n] for d in data])
+    # ????????????????????????
+    valid=np.isfinite(M).all(axis=0)&(np.abs(M)>1e-6).all(axis=0)
+    changes=[]
+    for off in np.nonzero(valid)[0]:
+        col=M[:,off]
+        if col.max()-col.min() > 1e-4*max(1.0,abs(float(col.mean()))):
+            changes.append((off, col))
+    print("\n=== %s ===" % a)
+    if not changes:
+        print("   ??????")
+        continue
+    for off,col in changes[:12]:
+        vals=", ".join("%.4g"%v for v in col)
+        print("   +0x%05X  %s" % (off*4, vals[:120]))
