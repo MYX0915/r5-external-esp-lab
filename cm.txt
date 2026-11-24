@@ -1,32 +1,36 @@
-容器回溯结果：hv 命中实为模型资源表
+当日复盘与次日行动清单
 
-回溯过程:
-  锚点 0x4924DC8 前 0x400 无模块指针
-  前 0x2000 有 47 个模块指针，步长 0x60 → 对象数组
-  锚点属对象 0x4924DA0 (k=84) 的 +0x28
+今日里程碑:
+  完整跑通 DX12 后处理穿墙描边管线
+    +0x2A0 contexts[0] / +0x2A8 focused / +0x2AC fadeDuration != 0
+    +0x2B4 fadeParity 仅开关时翻转
+  postProcess=1 样式行才渲染剪影（row50 可用 / row2 无效）
+  glowcolor 动态改样式表 RGB
+  本版本全量偏移表归档（300KB / 192 类段）
+  heap 上限放开，hv 全堆坐标检索可用
+  loot 枚举 prop_survival
+  内存采集 37% → 100%，驱动自动重连
+  mouse_event 输入注入可用（SendInput 被拦）
+  截图验证能力
 
-但对象内容是模型资源表:
-  0x4924D00 处字符串:
-    voc_base_v.rmdl
-    art/mshop/weapons/class/shotgun/eva8/eva8_base_v.rmdl
-    s/single_joint_props/lighter_fluid_02.rmdl
-  ⇒ 是模型路径 + 变换矩阵，不是 loot 实例也不是 ItemObject
+确认的边界:
+  prop_survival 顶层与浅层子指针均不含 loot 世界坐标
+  64KB 内候选均在 25m 外，无一对应脚下物品
+  地面物品发光为材质效果，与 Highlight 无关
+  loot 原生描边瓶颈在渲染收集过滤
 
-结论:
-  hv 工作正常，但训练场玩家周围 2~3 米的坐标副本主要属于
-  摄像机 / 玩家本体 / 场景道具武器的模型变换（如枪架上的 EVA-8）
-  未命中护盾电池等拾取物
+次日清单:
+  暂停 prop_survival 深层指针追踪
+  转入 ItemManager 全局指针扫描
+  新增驱动命令 arrscan：按步长扫描"连续含合法世界坐标的条目数组"
+  命中即为 ItemObject 数组，输出基址 + 坐标偏移 + count
+  然后用 WorldToScreen 做 2D Overlay（名称/稀有度/距离）
 
-loot 定位难点:
-  prop_survival 前 16KB 无坐标（方案B 已证）
-  hv 命中属模型资源表（本节已证）
-  可能位置: ItemManager 的 ItemObject / prop_survival 的子组件 / 物品登记表
+长期独立任务:
+  队列注入（rsp+0x2090 填充函数），需 IDA/Ghidra
 
-附: 内核 printf 不支持 %f，日志浮点显示为 f，后续改定点整数输出
+已知技术债:
+  内核 printf 不支持 %f → 改定点整数输出
+  请求通道会丢请求 → 多条打包
 
-下一轮入口:
-  1. 从 prop_survival 实体扫描内部指针字段，对每个合法指针 dump 0x200
-     找含地图坐标三元组的目标（跟随指针找组件的通用方法）
-  2. 或直接定位 ItemManager 全局指针（需特征码/交叉引用）
-
-文档新增第 105 节
+文档新增第 106 节
