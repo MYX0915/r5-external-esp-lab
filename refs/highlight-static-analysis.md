@@ -557,3 +557,83 @@ p_id = *(uint8_t**)(E + 0x298); if (p_id) *p_id = 0xFF;
 | `sa_fields.py/2/3.py` | 实体字段写者分类（初版，注意分块坑） |
 | `sa_hlblock.py` → `sa_hlblock.txt` | 0x2017000–0x201A900 高亮 native 块的函数边界 + 全反汇编（251 KB） |
 | `sa_hl2.py`, `sa_colwrite.py`, `sa_col2.py`, `sa_glocol.py`, `sa_consumer.py`, `sa_global.py`, `sa_extract.py` | 各结论点的取证 dump |
+
+---
+
+# ⚠ 勘误与追加核实（2026-11-24 12:4x，主代理逐字节复核）
+
+## 纠正：闸门2 的 RVA 错误
+
+本报告第 6.1 节把闸门2 标为 `0x2017E8E`，**不成立**。
+
+函数入口 = **0x2017E50**，闸门2 实际在 **0x2017EA8**（取值）与 **0x2017EBE**（比较）。
+
+原始字节（0x2017E70~0x2017EB0）：
+```
+48 8B F1 74 33 8B 8E 38 01 00 00 83 F9 FF 74 28
+0F B7 C1 48 C1 E0 05 48 03 C7 74 1C C1 E9 10 39
+48 08 75 14 48 8B 08 48 85 C9 74 0C F6 81 3C 03
+00 00 02 48 8B F1 75 CD 48 8B 86 98 02 00 00 48
+```
+
+正确反汇编：
+```asm
+0x2017E5F  test byte ptr [rcx+0x33C], 2      ; 闸门1（原始 rcx）
+0x2017E66  lea  rdi, [rip+0x4b3976b]         ; 句柄表基址
+0x2017E73  je   0x2017EA8
+0x2017E75  mov  ecx, [rsi+0x138]             ; 父链循环
+0x2017E80  movzx eax,cx / shl rax,5 / add rax,rdi
+0x2017E8F  cmp  dword ptr [rax+8], ecx       ; generation 校验
+0x2017E94  mov  rcx, [rax]
+0x2017E9C  test byte ptr [rcx+0x33C], 2      ; 父实例闸门1
+0x2017EA6  jne  0x2017E75
+0x2017EA8  mov  rax, qword ptr [rsi+0x298]   ; ★ 闸门2
+0x2017EBE  cmp  byte ptr [rax], 0xFF         ; ★ 真实解引用
+0x2017EC7  je   0x20180FA
+```
+
+**确认 `+0x298` 在 0x2017EBE 处是真实解引用**（`cmp byte ptr [rax],0xFF`），
+不是值比较。因此该函数只能被"`+0x298` 为合法指针"的对象调用。
+
+## 追加证据 1：`+0x298` 无任何 64 位写入者
+
+全 `.text` 扫描引用 `+0x298` 的指令共 607 处（含大量结构体偏移撞车），
+其中作为目标操作数的 237 处，**`mov qword ptr [reg+0x298], r64` 为 0 处**。
+
+⇒ 该字段不由简单 store 赋值，只能来自对象构造或整体复制。
+
+## 追加证据 2：复制函数两侧均解引用
+
+```asm
+0x200FADD  mov rax, qword ptr [rdx + 0x298]
+0x200FAE4  mov rcx, qword ptr [rcx + 0x298]
+           mov al, byte ptr [rax]
+           mov byte ptr [rcx], al
+```
+确认是"指向单字节的指针"，非值拷贝。
+
+## 追加证据 3：调用方取对象的方式
+
+渲染侧调用点（0x226D487 / 0x226D49A / 0x226D61D / 0x226D631）：
+
+```asm
+0x226D400  movzx r12d, word ptr [r14]
+0x226D407  mov   rdi, qword ptr [r13 + r12*8 + 0x8000]
+0x226D46F  lea   rbp, [rdi - 0x10]           ; 接口下调整
+0x226D484  mov   rcx, rbp
+0x226D487  call  0x2017E50
+```
+
+## 结论修正
+
+原报告隐含"实体就是 rcx"的前提不成立。
+高亮系统操作的是**渲染项 / 模型实例**，由 `渲染项数组[idx] - 0x10` 得到。
+
+要达成高亮，必须先取得"实体 → 渲染项索引"的映射：
+```
+1. 实体中保存 16 位渲染项索引的字段
+2. 渲染项数组基址（r13 的来源全局）
+3. modelInstance = *(u64*)(base + idx*8 + 0x8000) - 0x10
+4. 对 modelInstance 执行 4 道闸门写入
+```
+在此之前，对实体本身的写入不会触发高亮。
