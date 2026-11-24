@@ -386,6 +386,7 @@ static ULONG CollectRegions(PEPROCESS proc, REG* out, ULONG max, U64 minSz, U64 
 
 #define RVA_LOCAL_HANDLE 0x3D3DCD0ULL
 #define RVA_ENTITY_ARRAY 0x6B515D8ULL
+#define RVA_HIGHLIGHT_GLOBAL 0x72BE6C0ULL
 static U64 modBaseForNpc = 0;
 
 /* one-shot closed loop for NPC hunting:
@@ -584,6 +585,7 @@ static NTSTATUS MemRead(PEPROCESS proc, U64 va, PVOID dst, SIZE_T len);
 static NTSTATUS MemWrite(PEPROCESS proc, U64 va, PVOID src, SIZE_T len);
 static VOID GlowTick(PEPROCESS proc);
 static VOID GlowParity(PEPROCESS proc);
+static VOID GlowColorRow(PEPROCESS proc, U64 globalVa, ULONG row, float r, float g, float b);
 static VOID HeapValueScan(PEPROCESS proc, float tx, float ty, float tz, float rad);
 static VOID LootScan(PEPROCESS proc, U64 arrVa);
 static VOID WriteVa(PEPROCESS proc, UCHAR* p, UCHAR* le);
@@ -744,6 +746,26 @@ static VOID LootScan(PEPROCESS proc, U64 arrVa)
     KF("[mdump] loot done n=%lu\n", n);
 }
 
+
+/* glowcolor <row> <r> <g> <b>
+ * ?? HighlightSettings ????? RGB?float?0..1?
+ * row ?? = *(module + 0x72BE6C0) + row * 0x34
+ *            +0x04 R, +0x08 G, +0x0C B
+ */
+static VOID GlowColorRow(PEPROCESS proc, U64 globalVa, ULONG row, float r, float g, float b)
+{
+    U64 tbl = 0, entry;
+    if (!NT_SUCCESS(MemRead(proc, globalVa, &tbl, 8)) || !tbl) {
+        K("[mdump] glowcolor: table ptr null\n");
+        return;
+    }
+    entry = tbl + (U64)row * 0x34ULL;
+    MemWrite(proc, entry + 0x04, &r, 4);
+    MemWrite(proc, entry + 0x08, &g, 4);
+    MemWrite(proc, entry + 0x0C, &b, 4);
+    KF("[mdump] glowcolor row=%lu rgb=(%.2f,%.2f,%.2f) entry=0x%llX\n", row, r, g, b, entry);
+}
+
 static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN)
 {
     PUCHAR buf = ExAllocatePool2(POOL_FLAG_NON_PAGED, DUMP_CHUNK, 'snap');
@@ -770,7 +792,19 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                     UCHAR* le = p;
                     while (le < end && *le != '\r' && *le != '\n') le++;
                     if (le > p) {
-                        if ((p[0] == 'l' || p[0] == 'L') && (p[1] == 'o' || p[1] == 'O') && (p[2] == 'o' || p[2] == 'O') && (p[3] == 't' || p[3] == 'T')) {
+                        if ((p[0] == 'g' || p[0] == 'G') && (p[1] == 'l' || p[1] == 'L') && (p[2] == 'o' || p[2] == 'O') && (p[3] == 'w' || p[3] == 'W') && (p[4] == 'c' || p[4] == 'C')) {
+                            const UCHAR* qc = p + 5;
+                            ULONG row = 0; BOOLEAN seen = FALSE;
+                            while (qc < le) { UCHAR c = *qc;
+                                if (c >= '0' && c <= '9') { row = row * 10 + (c - '0'); seen = TRUE; }
+                                else if (seen) break;
+                                qc++; }
+                            if (seen) {
+                                float cr = ParseF(&qc, le), cg = ParseF(&qc, le), cb = ParseF(&qc, le);
+                                GlowColorRow(proc, modBaseForNpc + RVA_HIGHLIGHT_GLOBAL, row, cr, cg, cb);
+                            } else K("[mdump] glowcolor: bad args\n");
+                        }
+                        else if ((p[0] == 'l' || p[0] == 'L') && (p[1] == 'o' || p[1] == 'O') && (p[2] == 'o' || p[2] == 'O') && (p[3] == 't' || p[3] == 'T')) {
                             K("[mdump] loot scan start\n");
                             LootScan(proc, modBaseForNpc + RVA_ENTITY_ARRAY);
                         }

@@ -1,32 +1,26 @@
-高亮链路打通：人物轮廓实测成功
+实现实测验证后的完整 Glow 序列 + glowcolor 颜色命令
 
-最终写入序列（本版本真实偏移）:
+依据今天实测确认的写入序列（UC 公开文档缺失 fadeDuration）:
   +0x2A0 contexts[0] = 样式行号（必须 postProcess=1）
   +0x2A8 focused     = 1
-  +0x2AC fadeDuration= 1.0f（非 0，否则闸门4丢弃）
-  +0x2B4 fadeParity  ^= 1（仅切换时翻转）
+  +0x2AC fadeDuration= 1.0f    ← 关键：为 0 时渲染管线直接丢弃，无轮廓
+  +0x2B4 fadeParity  ^= 1      ← 仅开关瞬间翻转，tick 不触碰
 
-实测证据:
-  对局中对 18 个玩家实体写入 row50
-  截图 refs/aim1.png 拍到集装箱顶部透出橙色人物剪影（穿墙）
-  改为 row2 → 轮廓消失（postProcess=0）
-  改回 row50 → 恢复
-  ⇒ 双重验证，排除巧合
+驱动命令:
+  glow 0x<实体> <row>       开启保活
+  glowoff                   关闭
+  glowcolor <row> <r> <g> <b> 修改样式表 RGB
+  loot                      扫描 prop_survival / prop_death_box
 
-样式表颜色可自定义:
-  row50 = *(module+0x72BE6C0) + 50*0x34
-  +0x04/+0x08/+0x0C = RGB float
-  实测改为绿色后回读确认生效
+glowcolor 实现:
+  row 地址 = *(module + 0x72BE6C0) + row*0x34
+  +0x04 R / +0x08 G / +0x0C B（float，0..1）
 
-失败原因回顾:
-  早期 DX11 偏移已失效
-  中期 UC 帖子偏移属于另一构建（本版本 0x294 是重力时间）
-  后期正确偏移但选了 postProcess=0 的样式行
+实测结论（本版本）:
+  1. postProcess=1 的样式行才渲染穿墙剪影轮廓（row50 有，row2 无）
+  2. fadeDuration 必须非 0
+  3. parity 高频翻转会导致失效
+  4. loot / npc_dummie 写入字段后无轮廓（ModelInstance 不进渲染队列）
+  5. 地面物品紫/橙发光是材质效果，独立于 Highlight 系统
 
-loot 现状:
-  loot 命令已实现（按 m_iSignifierName 0x478 识别 prop_survival/prop_death_box）
-  一次扫描命中 200 个（上限截断）
-  写入字段全部保持，但画面未确认（可见物品可能不在列表内）
-  减法验证证实画面上的紫/橙发光是游戏自带稀有度效果
-
-文档新增第 103 节
+驱动产物: bin\mdump.sys 16:39:48
