@@ -611,7 +611,10 @@ static VOID GlowTick(PEPROCESS proc)
     b = (UCHAR)(g_glowRow & 0xFF);
     MemWrite(proc, g_glowEnt + 0x294, &b, 1);
     MemWrite(proc, g_glowEnt + 0x295, &b, 1);
-    if (NT_SUCCESS(MemRead(proc, g_glowEnt + 0x29D, &b, 1))) {
+    /* +0x29D ????????????
+     * ?? bit0 ? 0 ???????? tick ????
+     * ? MmCopyVirtualMemory ???????????????? */
+    if (NT_SUCCESS(MemRead(proc, g_glowEnt + 0x29D, &b, 1)) && !(b & 1)) {
         b = (UCHAR)(b | 1);
         MemWrite(proc, g_glowEnt + 0x29D, &b, 1);
     }

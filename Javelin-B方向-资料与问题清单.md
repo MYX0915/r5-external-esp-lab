@@ -4350,3 +4350,92 @@ Apex item manager loot entity reversal
 Apex render collect modelinstance per frame stack array
 respawn engine highlight collection filter
 ```
+
+---
+
+## 100. glow 保活的竞态加固（2026-11-24 14:0x）
+
+### 100.1 问题定位
+
+`GlowTick` 中三个字段的处理方式不同：
+
+```c
+MemWrite(+0x294, row);        // 直接字节写 —— 无读改写，无竞态
+MemWrite(+0x295, row);        // 同上
+MemRead (+0x29D, &b);         // ┐
+b |= 1;                       // │ 读-改-写
+MemWrite(+0x29D, &b);         // ┘ ← 唯一存在竞态窗口的地方
+```
+
+`+0x29D` 是多 bit 共存的掩码字段（每个 context slot 一位）。
+若引擎在"读"与"写"之间修改了其他位，我们的写回会覆盖引擎的修改。
+
+### 100.2 `_InterlockedOr8` 方案的内核障碍（重要）
+
+直接用 `_InterlockedOr8(pSlotMask, 1)` **不可行**：
+该指令作用于**当前进程上下文**的地址空间，而 `+0x29D` 是游戏进程的用户态地址，
+在内核上下文里通常未映射，直接执行会触发内核页错误。
+
+必须配合进程上下文切换：
+
+```c
+KAPC_STATE apc;
+KeStackAttachProcess(g_espProc, &apc);
+_InterlockedOr8(pSlotMask, 1);
+KeUnstackDetachProcess(&apc);
+```
+
+代价：每 tick 一次 attach/detach，开销明显；
+且目标页被换出时仍有异常风险（内核 SEH 处理复杂）。
+
+### 100.3 采用的轻量加固
+
+关键观察：引擎把 `+0x29D` 复位成 **`0x19`**，其中 **bit0 本来就是 1**。
+
+因此改为"**bit0 已是 1 就不写**"：
+
+```c
+if (NT_SUCCESS(MemRead(proc, g_glowEnt + 0x29D, &b, 1)) && !(b & 1)) {
+    b |= 1;
+    MemWrite(proc, g_glowEnt + 0x29D, &b, 1);
+}
+```
+
+效果：稳态下绝大多数 tick 完全不触碰该字段，竞态窗口降到接近零，
+且不需要 attach/detach。
+
+### 100.4 parity 语义（再次确认）
+
+```
++0x2A8 是"变更事件"标记，不是持续开关
+仅 GlowEnable / GlowDisable 各翻转一次
+tick 循环绝不触碰
+```
+
+高频异或会导致振荡，可能被渲染子系统的防抖逻辑判定为无效而丢弃高亮请求。
+
+### 100.5 两条独立路线（不可混用）
+
+| 路线 | 解决什么 | 不能解决什么 |
+|---|---|---|
+| **队列注入**（`rsp+0x2090` 填充函数） | 把任意 ModelInstance 送入高亮渲染闸门 | — |
+| **ItemManager 逆向** | 读取 loot 坐标用于 overlay ESP | **不能**给 loot 开启原生 glow |
+
+即便通过 ItemManager 拿到 loot 对象，其 ModelInstance 仍需进入高亮队列才可能描边。
+两条链路必须分开推进。
+
+### 100.6 当前结论
+
+```
+✓ 训练场 npc_dummie / bot 在收集阶段被剪枝，不进 u16 索引队列
+✓ Entity selector/mask/parity 仅为样式配置，是否渲染由收集队列决定
+✓ Loot 不在 CEntityList，由 ItemManager 维护，布局与 Actor 不同
+✓ 原生 glow 仅对局 Player 实体可走完整管线
+```
+
+### 100.7 驱动变更
+
+```
+bin\mdump.sys  14:02:49
+  GlowTick 的 +0x29D 处理增加 "bit0 已置位则跳过写入" 判断
+```
