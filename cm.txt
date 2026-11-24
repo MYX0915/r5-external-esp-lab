@@ -1,25 +1,38 @@
-堆枚举缺陷 + loot 位置搜索的否定结果
+归档本版本全量偏移表 + 高亮字段重大更正
 
-驱动堆枚举缺陷（重要）:
-  heap 命令筛选条件含 m.Size <= 0x04000000（64MB 上限）
-  实测覆盖 0x4BEAC000 ~ 0xF663C000，而实体在 0x12D101D50
-  ⇒ 实体堆是超过 64MB 的超大地块，被整体排除
-  ⇒ 此前所有基于 heap 的结构搜索都只覆盖低地址堆
+来源: pastes.dev/cBGQZ7Vsqp（经 api.pastes.dev 取原始内容）
+保存: refs/apex-offsets-latest.txt
+  300,866 字节 / 9,070 行 / 192 个类段
 
-手工窗口 dump:
-  0x12D000000 / 0x12C000000 / 0x12E000000 各 64MB（共 192MB）
-  按距玩家 4.7 米内搜索 float 三元组:
-    仅命中玩家位置（多处副本）与摄像机位置
-    loot 物品坐标 0 处
+交叉验证（确认整表适用于我们的构建）:
+  EntityList        0x6b515d8  ↔ 实测 0x6B515D8      ✓
+  highlightSetting  0x72be6c0  ↔ 实测 0x72BE6C0      ✓
+  m_scriptName      0x590      ↔ 实测 "npc_dummie"   ✓
+  camera_origin     0x1f78     ↔ 实测 0x1F78         ✓
+  studioHdr         0xfd0      ↔ 实测 0xFD0          ✓
+  m_viewangle       0x25c8     ↔ 实测 0x25C8         ✓
 
-结论:
-  loot 位置数据不由客户端实体数组承载
-  与社区"ItemManager 独立维护"一致
+重大更正 — 高亮字段真实偏移:
+  UC 帖子给的 0x294/0x295/0x29D/0x2A8 属于另一构建
+  本版本真实值:
+    m_highlightGenericContexts = 0x2a0
+    m_highlightFocused         = 0x2a8
+    m_highlightFadeDuration    = 0x2ac
+    m_highlightFadeParity      = 0x2b4
+    m_highlightTeamBits        = 0x1e4
+    m_highlightTeamIndex       = 0x1d4
+  本版本 0x294 = m_playerLocalGravityBlendEndTime（重力时间）
+  ⇒ 解释了此前"写 0x294 总被引擎改回"——一直在改物理时间字段
 
-若要继续找 loot 需先修复:
-  heap 命令去掉 64MB 上限，按块 dump 高地址堆（预计数 GB）
-  或定位 ItemManager 全局指针（需特征码/交叉引用）
+其他关键字段:
+  m_iSignifierName = 0x478（char* 指针，Echo 用 prop_survival 识别 loot）
+  m_vecAbsOrigin   = 0x170
+  LocalPlayer      = 0x3eac668（直接指针）
+  observerList     = 0x6b535f8
+  以及 9 个 highlight_* ConVar 全局
 
-附带收获: 玩家位置的 5 处内存副本地址已记录
+实测状态:
+  用正确偏移对 64 个实体批量写入，字段全部保持（不再被回写）
+  但训练场假人仍无可见轮廓，待对真人玩家验证
 
-文档新增第 101 节
+文档新增第 102 节

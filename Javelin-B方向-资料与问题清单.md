@@ -4514,3 +4514,126 @@ snap 2179  0x12E000000  64MB
 ```
 
 均为 `(-7293.86, 1187.44, -19.95)`（站定时）。
+
+---
+
+## 102. 本版本全量偏移表归档（2026-11-24 14:4x）
+
+### 102.1 来源与完整性
+
+用户提供的当前版本偏移表，已完整保存：
+
+```
+refs/apex-offsets-latest.txt
+  大小     300,866 字节
+  行数     9,070
+  类段数   192
+  来源     https://pastes.dev/cBGQZ7Vsqp
+           （原始内容经 https://api.pastes.dev/cBGQZ7Vsqp 获取）
+```
+
+### 102.2 与本项目的交叉验证（关键）
+
+该偏移表中多个值与我们长期实测**完全一致**，确认整表适用于我们的构建：
+
+| 字段 | 偏移表 | 我们实测 | 一致性 |
+|---|---|---|---|
+| EntityList | 0x6b515d8 | 0x6B515D8 | ✅ |
+| highlightSetting | 0x72be6c0 | 0x72BE6C0 | ✅ |
+| m_scriptName | 0x590 | 0x590（内联字符串，解码出 "npc_dummie"） | ✅ |
+| camera_origin | 0x1f78 | 0x1F78 | ✅ |
+| studioHdr | 0xfd0 | 0xFD0 | ✅ |
+| m_viewangle | 0x25c8 | 0x25C8 | ✅ |
+
+### 102.3 [Mics] 段全文（全局偏移）
+
+```
+CHLClient                    = 0x409cf48
+ClientState                  = 0x3658340
+EntityList                   = 0x6b515d8     ← 实体数组
+GlobalVars                   = 0x3658090
+InputSystem                  = 0x370f200
+LevelName                    = 0x3658514
+LocalPlayer                  = 0x3eac668     ← 直接指针（我们用的是句柄法）
+ModelNames                   = 0x3681660
+NameList                     = 0x95bc1a0
+NetworkVarTablePtr           = 0x983a050
+SignonState                  = 0x36583fc
+ViewMatrix                   = 0x11a390
+ViewRender                   = 0x5267cc0
+WeaponNames                  = 0x5267ca8
+WeaponSettingsMeta_base      = 0x18f8
+camera_origin                = 0x1f78
+cinput                       = 0x7083088
+commandNumber                = 0x368113c
+highlightSetting             = 0x72be6c0     ← 高亮样式表全局
+lastVisibleTime              = 0x1a6c
+localplayerHandle            = 0x3d3a8d0
+m_scriptName                 = 0x590
+m_vecAbsOrigin               = 0x170
+m_viewangle                  = 0x25c8
+m_weaponClassName            = 0x18b0
+netChannel                   = 0x36583a8
+observerList                 = 0x6b535f8
+observer_index               = 0x94
+studioHdr                    = 0xfd0
+```
+
+### 102.4 [DT_HighlightSettings]（本版本真实高亮字段）
+
+```
+m_highlightGenericContexts   = 0x2a0    ← 4 字节，每字节一个 context id（样式行）
+m_highlightFocused           = 0x2a8    ← 聚焦掩码，bit0 = slot0
+m_highlightFadeDuration      = 0x2ac    ← 淡入时长（float）
+m_highlightFadeParity        = 0x2b4    ← 变更事件标记，仅切换时翻转
+m_highlightTeamBits          = 0x1e4
+m_highlightTeamIndex         = 0x1d4
+```
+
+**重要更正**：UC 帖子《DX12 Highlight System》给出的 `+0x294 selector / +0x295 contexts / +0x29D focused / +0x2A8 parity`
+是本表**另一构建**的偏移。在我们版本中：
+
+```
+0x294 = m_playerLocalGravityBlendEndTime   ← 重力混合时间，与高亮无关
+0x2A0 = m_highlightGenericContexts         ← 真正的高亮 contexts
+0x2A8 = m_highlightFocused
+0x2B4 = m_highlightFadeParity
+```
+
+这解释了此前所有"写入 +0x294 被引擎改回"的现象——**我们一直在改一个物理时间字段**。
+
+### 102.5 实体级其它相关字段
+
+```
+m_iSignifierName             = 0x478    ← char* 指针，指向 "prop_survival" 等
+                                          （Echo 用它识别 loot：prop_survival / prop_death_box）
+m_wantsScopeHighlight        = 0x2d8
+```
+
+### 102.6 高亮相关 ConVar（全局，可按需读取验证）
+
+```
+highlight_draw                       = 0x377a450
+highlight_deferred_update            = 0x3d4db80
+highlight_enable_discard             = 0x377a3c0
+highlight_object_max_count           = 0x377a540
+highlight_lazy_clear_buffers         = 0x377a5d0
+highlight_visibility_use_spin_lock   = 0x3d34b80
+highlight_verbose                    = 0x3ee4630
+hud_setting_showEnemyHighlight       = 0x3d80c70
+directlighting_debugpick_highlight   = 0x377b2c0
+enable_highlight_networking_on_creation = 0x549
+```
+
+### 102.7 已完成的实测（本版本正确偏移）
+
+对 64 个实体批量写入后**字段全部保持**（不再被引擎回写）：
+
+```
++0x2A0 contexts[0] = 0x32 (row 50)   ✓ 保持
++0x2A8 focused     = 1                ✓ 保持
++0x2AC fadeDur     = 1.0f             ✓ 保持
++0x2B4 parity      = 1                ✓ 保持
+```
+
+但训练场假人**仍无可见轮廓**，待在对局中对真人玩家验证。

@@ -213,7 +213,7 @@ static VOID Run(PEPROCESS proc)
             addr += 0x10000; continue;
         }
         if (m.State == 0x1000 && (m.Protect & 0xFF) == 0x04 && m.Type == 0x20000 &&
-            m.Size >= 0x10000 && m.Size <= 0x04000000ULL) {
+            m.Size >= 0x10000) {
             regs[count].Base = (U64)m.Base;
             regs[count].Size = m.Size;
             count++;
@@ -584,6 +584,7 @@ static NTSTATUS MemRead(PEPROCESS proc, U64 va, PVOID dst, SIZE_T len);
 static NTSTATUS MemWrite(PEPROCESS proc, U64 va, PVOID src, SIZE_T len);
 static VOID GlowTick(PEPROCESS proc);
 static VOID GlowParity(PEPROCESS proc);
+static VOID HeapValueScan(PEPROCESS proc, float tx, float ty, float tz, float rad);
 static VOID WriteVa(PEPROCESS proc, UCHAR* p, UCHAR* le);
 
 /* ---------------- glow keepalive (path 1: entity selector) ----------------
@@ -620,6 +621,76 @@ static VOID GlowTick(PEPROCESS proc)
     }
 }
 
+
+/* hv <x> <y> <z> <radius> : ?? RW private ????????????????
+ * ??????? sc_hits.txt????????? */
+static float ParseF(const UCHAR** pp, const UCHAR* le)
+{
+    const UCHAR* q = *pp; float v = 0; BOOLEAN neg = FALSE; float frac = 0; int div = 1;
+    while (q < le && *q == ' ') q++;
+    if (q < le && *q == '-') { neg = TRUE; q++; }
+    while (q < le && *q >= '0' && *q <= '9') { v = v * 10 + (*q - '0'); q++; }
+    if (q < le && *q == '.') { q++; while (q < le && *q >= '0' && *q <= '9') { frac = frac*10 + (*q-'0'); div *= 10; q++; } }
+    v += frac / div;
+    *pp = q;
+    return neg ? -v : v;
+}
+
+static VOID HeapValueScan(PEPROCESS proc, float tx, float ty, float tz, float rad)
+{
+    KAPC_STATE apc;
+    U64 addr = 0x10000;
+    ULONG hits = 0;
+    PUCHAR buf = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x100000, 'hvSC');
+    CHAR*  out = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x8000, 'hvOT');
+    CHAR*  w;
+    float r2 = rad * rad;
+    if (!buf || !out) { if(buf) ExFreePoolWithTag(buf,'hvSC'); if(out) ExFreePoolWithTag(out,'hvOT'); return; }
+    RtlZeroMemory(out, 0x8000); w = out;
+    w = AppendFmt(w, out + 0x8000, "target=(%.2f,%.2f,%.2f) r=%.2f\n", tx, ty, tz, rad);
+
+    while (addr < 0x00007FFFFFFF0000ULL && hits < 128) {
+        MBINF m; SIZE_T rr = 0;
+        U64 base, sz, off;
+        RtlZeroMemory(&m, sizeof(m));
+        KeStackAttachProcess(proc, &apc);
+        if (!NT_SUCCESS(ZwQueryVirtualMemory(NtCurrentProcess(), (PVOID)(ULONG_PTR)addr, 0, &m, sizeof(m), &rr)) || !m.Size) {
+            KeUnstackDetachProcess(&apc);
+            addr += 0x10000; continue;
+        }
+        base = (U64)m.Base; sz = m.Size;
+        KeUnstackDetachProcess(&apc);
+
+        if (m.State == 0x1000 && (m.Protect & 0xFF) == 0x04 && m.Type == 0x20000 && sz >= 0x10000) {
+            off = 0;
+            while (off < sz && hits < 128) {
+                SIZE_T got = 0;
+                ULONG chunk = 0x100000;
+                ULONG i;
+                if (off + chunk > sz) chunk = (ULONG)(sz - off);
+                if (chunk < 12) break;
+                if (NT_SUCCESS(MmCopyVirtualMemory(proc, (PVOID)(ULONG_PTR)(base + off), PsGetCurrentProcess(),
+                                                   buf, chunk, KernelMode, &got)) && got == chunk) {
+                    for (i = 0; i + 12 <= chunk; i += 4) {
+                        float* f = (float*)(buf + i);
+                        float dx = f[0] - tx, dy = f[1] - ty, dz = f[2] - tz;
+                        if (dx*dx + dy*dy + dz*dz < r2) {
+                            w = AppendFmt(w, out + 0x8000, "0x%llX\n", base + off + i);
+                            if (++hits >= 128) break;
+                        }
+                    }
+                }
+                off += chunk;
+            }
+        }
+        if (sz) addr = base + sz; else addr += 0x10000;
+    }
+    WriteFileAt(L"\\??\\C:\\ProgramData\\sc_hits.txt", out, (ULONG)(w - out) + 1);
+    ExFreePoolWithTag(buf, 'hvSC');
+    ExFreePoolWithTag(out, 'hvOT');
+    KF("[mdump] hv done hits=%lu\n", hits);
+}
+
 static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN)
 {
     PUCHAR buf = ExAllocatePool2(POOL_FLAG_NON_PAGED, DUMP_CHUNK, 'snap');
@@ -646,7 +717,14 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                     UCHAR* le = p;
                     while (le < end && *le != '\r' && *le != '\n') le++;
                     if (le > p) {
-                        if ((p[0] == 'g' || p[0] == 'G') && (p[1] == 'l' || p[1] == 'L') && (p[2] == 'o' || p[2] == 'O')) {
+                        if ((p[0] == 'h' || p[0] == 'H') && (p[1] == 'v' || p[1] == 'V') && p[2] == ' ') {
+                            const UCHAR* qf = p + 3;
+                            float fx = ParseF(&qf, le), fy = ParseF(&qf, le), fz = ParseF(&qf, le), fr = ParseF(&qf, le);
+                            if (fr <= 0) fr = 100.0f;
+                            KF("[mdump] hv start (%.2f,%.2f,%.2f) r=%.2f\n", fx, fy, fz, fr);
+                            HeapValueScan(proc, fx, fy, fz, fr);
+                        }
+                        else if ((p[0] == 'g' || p[0] == 'G') && (p[1] == 'l' || p[1] == 'L') && (p[2] == 'o' || p[2] == 'O')) {
                             UCHAR* q4 = p;
                             if ((q4[3] == 'w' || q4[3] == 'W') && (q4[4] == 'o' || q4[4] == 'O')) {
                                 GlowParity(proc);
