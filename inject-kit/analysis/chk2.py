@@ -1,15 +1,12 @@
-import struct, time
-for _ in range(30):
-    try:
-        f=open(r"C:\ProgramData\sc_feed.bin","rb").read()
-    except: time.sleep(0.2); continue
-    ok=struct.unpack_from("<I",f,48)[0]; cnt=struct.unpack_from("<I",f,44)[0]
-    inst=struct.unpack_from("<Q",f,56)[0]
-    if ok and inst: break
-    time.sleep(0.2)
-print("ok=%d inst=0x%X count=%d" % (ok,inst,cnt))
-cam=struct.unpack_from("<3f",f,8); pos=struct.unpack_from("<3f",f,32)
-print("cam=(%.1f,%.1f,%.1f) pos=(%.1f,%.1f,%.1f)" % (cam+pos))
-for i in range(min(cnt,10)):
-    e=struct.unpack_from("<3f", f, 64+i*12)
-    print("   ent[%d]=(%.1f,%.1f,%.1f)" % (i,e[0],e[1],e[2]))
+import struct, glob, os
+p0=open("players_now.txt").readline().strip(); e=int(p0,16)
+def rd(va,size):
+    hexv="%X"%va
+    fs=sorted([x for x in glob.glob(r"C:\ProgramData\scdump\*_%s.bin"%hexv) if os.path.getsize(x)==size], key=os.path.getmtime)
+    return open(fs[-1],"rb").read() if fs else None
+r1=rd(e+0x1D4,0x8)
+if r1: print("  teamIndex = %d" % struct.unpack_from("<i",r1,0)[0])
+r2=rd(e+0x2A8,0x10)
+if r2:
+    print("  focused = 0x%08X   parity = 0x%08X" % (
+      struct.unpack_from("<I",r2,0)[0], struct.unpack_from("<I",r2,12)[0]))

@@ -1,0 +1,10 @@
+import struct, glob, os, datetime
+me=int(open("me_now.txt").read().strip(),16)
+hexv="%X"%(me+0x1F84)
+fs=sorted([x for x in glob.glob(r"C:\ProgramData\scdump\*_%s.bin"%hexv) if os.path.getsize(x)==0xC], key=os.path.getmtime)
+raw=open(fs[-1],"rb").read()
+p,y,r=struct.unpack_from("<3f",raw,0)
+print("  ?? angles: pitch=%.2f yaw=%.2f roll=%.2f" % (p,y,r))
+f=open(r"C:\ProgramData\sc_feed.bin","rb").read()
+a=struct.unpack_from("<2f",f,20)
+print("  feed ang:   pitch=%.2f yaw=%.2f" % (a[0],a[1]))

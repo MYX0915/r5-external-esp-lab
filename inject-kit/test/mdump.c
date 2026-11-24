@@ -585,6 +585,7 @@ static NTSTATUS MemWrite(PEPROCESS proc, U64 va, PVOID src, SIZE_T len);
 static VOID GlowTick(PEPROCESS proc);
 static VOID GlowParity(PEPROCESS proc);
 static VOID HeapValueScan(PEPROCESS proc, float tx, float ty, float tz, float rad);
+static VOID LootScan(PEPROCESS proc, U64 arrVa);
 static VOID WriteVa(PEPROCESS proc, UCHAR* p, UCHAR* le);
 
 /* ---------------- glow keepalive (path 1: entity selector) ----------------
@@ -599,9 +600,10 @@ static VOID GlowParity(PEPROCESS proc)
 {
     ULONG pv;
     if (!g_glowEnt || !proc) return;
-    if (NT_SUCCESS(MemRead(proc, g_glowEnt + 0x2A8, &pv, 4))) {
+    /* ??? m_highlightFadeParity = 0x2B4??? 0x2A8? */
+    if (NT_SUCCESS(MemRead(proc, g_glowEnt + 0x2B4, &pv, 4))) {
         pv ^= 1;
-        MemWrite(proc, g_glowEnt + 0x2A8, &pv, 4);
+        MemWrite(proc, g_glowEnt + 0x2B4, &pv, 4);
     }
 }
 
@@ -609,16 +611,18 @@ static VOID GlowTick(PEPROCESS proc)
 {
     UCHAR b;
     if (!g_glowOn || !g_glowEnt || !proc) return;
+    /* ???????????????????? [DT_HighlightSettings]?:
+     *   m_highlightGenericContexts  0x2A0  (4 x uint8, ????? slot ????)
+     *   m_highlightFocused          0x2A8  (uint32 ???, bit0 = slot0)
+     *   m_highlightFadeDuration     0x2AC  (float, ??? 0 ??????)
+     *   m_highlightFadeParity       0x2B4  (uint32 ????)
+     */
+    ULONG one = 1;
+    float fd  = 1.0f;
     b = (UCHAR)(g_glowRow & 0xFF);
-    MemWrite(proc, g_glowEnt + 0x294, &b, 1);
-    MemWrite(proc, g_glowEnt + 0x295, &b, 1);
-    /* +0x29D ????????????
-     * ?? bit0 ? 0 ???????? tick ????
-     * ? MmCopyVirtualMemory ???????????????? */
-    if (NT_SUCCESS(MemRead(proc, g_glowEnt + 0x29D, &b, 1)) && !(b & 1)) {
-        b = (UCHAR)(b | 1);
-        MemWrite(proc, g_glowEnt + 0x29D, &b, 1);
-    }
+    MemWrite(proc, g_glowEnt + 0x2A0, &b, 1);      /* contexts[0] = ??? */
+    MemWrite(proc, g_glowEnt + 0x2A8, &one, 4);    /* focused bit0 */
+    MemWrite(proc, g_glowEnt + 0x2AC, &fd, 4);     /* fadeDuration = 1.0 */
 }
 
 
@@ -691,6 +695,55 @@ static VOID HeapValueScan(PEPROCESS proc, float tx, float ty, float tz, float ra
     KF("[mdump] hv done hits=%lu\n", hits);
 }
 
+
+/* loot : ???????? m_iSignifierName(0x478, char*) ?????
+ * ?? "prop_survival"???/???? "prop_death_box"?????
+ * ???? + ??? sc_loot.txt??????? */
+static VOID LootScan(PEPROCESS proc, U64 arrVa)
+{
+    PUCHAR buf = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x10000, 'lotB');
+    CHAR*  out = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x8000, 'lotO');
+    CHAR*  w;
+    ULONG off, n = 0;
+    if (!buf || !out) { if(buf) ExFreePoolWithTag(buf,'lotB'); if(out) ExFreePoolWithTag(out,'lotO'); return; }
+    RtlZeroMemory(out, 0x8000); w = out;
+    w = AppendFmt(w, out + 0x8000, "# address sig pos(x,y,z)\n");
+
+    for (off = 0; off < 0x200000 && n < 200; off += 0x10000) {
+        SIZE_T got = 0;
+        ULONG k;
+        if (!NT_SUCCESS(MmCopyVirtualMemory(proc, (PVOID)(ULONG_PTR)(arrVa + off), PsGetCurrentProcess(),
+                                            buf, 0x10000, KernelMode, &got)) || got != 0x10000)
+            continue;
+        for (k = 0; k + 0x20 <= 0x10000 && n < 200; k += 0x20) {
+            U64 inst = *(U64*)(buf + k);
+            U64 sp = 0;
+            CHAR nm[32];
+            if (!inst || inst < 0x10000 || (inst >> 47)) continue;
+            if (!NT_SUCCESS(MemRead(proc, inst + 0x478, &sp, 8)) || !sp) continue;
+            if (sp < 0x10000 || (sp >> 47)) continue;
+            RtlZeroMemory(nm, sizeof(nm));
+            if (!NT_SUCCESS(MemRead(proc, sp, nm, 31))) continue;
+            if (!nm[0]) continue;
+            if (!((nm[0]=='p') && (nm[1]=='r') && (nm[2]=='o') && (nm[3]=='p'))) continue;
+            if (strncmp(nm, "prop_survival", 13) && strncmp(nm, "prop_death_box", 14)) continue;
+            {
+                float pv[3];
+                if (!NT_SUCCESS(MemRead(proc, inst + 0x978, pv, 12))) {
+                    pv[0] = pv[1] = pv[2] = 0.0f;
+                }
+                w = AppendFmt(w, out + 0x8000, "0x%llX %s %.1f,%.1f,%.1f\n",
+                              inst, nm, pv[0], pv[1], pv[2]);
+                n++;
+            }
+        }
+    }
+    WriteFileAt(L"\\??\\C:\\ProgramData\\sc_loot.txt", out, (ULONG)(w - out) + 1);
+    ExFreePoolWithTag(buf, 'lotB');
+    ExFreePoolWithTag(out, 'lotO');
+    KF("[mdump] loot done n=%lu\n", n);
+}
+
 static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN)
 {
     PUCHAR buf = ExAllocatePool2(POOL_FLAG_NON_PAGED, DUMP_CHUNK, 'snap');
@@ -717,7 +770,11 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                     UCHAR* le = p;
                     while (le < end && *le != '\r' && *le != '\n') le++;
                     if (le > p) {
-                        if ((p[0] == 'h' || p[0] == 'H') && (p[1] == 'v' || p[1] == 'V') && p[2] == ' ') {
+                        if ((p[0] == 'l' || p[0] == 'L') && (p[1] == 'o' || p[1] == 'O') && (p[2] == 'o' || p[2] == 'O') && (p[3] == 't' || p[3] == 'T')) {
+                            K("[mdump] loot scan start\n");
+                            LootScan(proc, modBaseForNpc + RVA_ENTITY_ARRAY);
+                        }
+                        else if ((p[0] == 'h' || p[0] == 'H') && (p[1] == 'v' || p[1] == 'V') && p[2] == ' ') {
                             const UCHAR* qf = p + 3;
                             float fx = ParseF(&qf, le), fy = ParseF(&qf, le), fz = ParseF(&qf, le), fr = ParseF(&qf, le);
                             if (fr <= 0) fr = 100.0f;
