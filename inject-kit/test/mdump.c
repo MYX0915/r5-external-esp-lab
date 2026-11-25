@@ -604,6 +604,7 @@ static VOID GlowTick(PEPROCESS proc);
 static VOID GlowParity(PEPROCESS proc);
 static VOID GlowColorRow(PEPROCESS proc, U64 globalVa, ULONG row, float r, float g, float b);
 static VOID HeapValueScan(PEPROCESS proc, float tx, float ty, float tz, float rad);
+static BOOLEAN ReadEntPos(PEPROCESS proc, U64 inst, float* out);
 static VOID LootScan(PEPROCESS proc, U64 arrVa);
 static VOID ArrScan(PEPROCESS proc, ULONG stride, ULONG minCount);
 static VOID WriteVa(PEPROCESS proc, UCHAR* p, UCHAR* le);
@@ -1388,12 +1389,7 @@ static ULONG ScanWorldPos(PEPROCESS proc, U64 arrVa, const float cam[3], float o
             float dx, dy, dz, d2;
             U64 vt = 0;
             if (!inst || inst < 0x10000 || (inst >> 47)) continue;
-            if (!NT_SUCCESS(MemRead(proc, inst + 0x978, p, 12))) continue;
-            if (p[0] != p[0] || p[1] != p[1] || p[2] != p[2]) continue;
-            if (p[0] < -60000.0f || p[0] > 60000.0f) continue;
-            if (p[1] < -60000.0f || p[1] > 60000.0f) continue;
-            if (p[2] < -60000.0f || p[2] > 60000.0f) continue;
-            if (p[0] > -1.0f && p[0] < 1.0f && p[1] > -1.0f && p[1] < 1.0f) continue;
+            if (!ReadEntPos(proc, inst, p)) continue;
             dx = p[0]-cam[0]; dy = p[1]-cam[1]; dz = p[2]-cam[2];
             d2 = dx*dx + dy*dy + dz*dz;
             if (d2 < 400.0f || d2 > 4.0e9f) continue;   /* 0.4m ~ 1100m???????? */
@@ -1427,6 +1423,30 @@ static VOID NearestSort(U64* addr, float* dist, ULONG n, ULONG keep)
     if (n > keep) {
         for (i = keep; i < n; i++) { addr[i] = 0; dist[i] = 0; }
     }
+}
+
+
+/* ?????????????????????????
+ *   ????? / ??? : +0x978
+ *   ??????        : +0x7830
+ *   ????            : +0x376C
+ * ????????????? */
+static BOOLEAN ReadEntPos(PEPROCESS proc, U64 inst, float* out)
+{
+    static const ULONG kOff[3] = { 0x978, 0x7830, 0x376C };
+    ULONG i;
+    for (i = 0; i < 3; i++) {
+        float t[3];
+        if (!NT_SUCCESS(MemRead(proc, inst + kOff[i], t, 12))) continue;
+        if (t[0] != t[0] || t[1] != t[1] || t[2] != t[2]) continue;
+        if (t[0] < -60000.0f || t[0] > 60000.0f) continue;
+        if (t[1] < -60000.0f || t[1] > 60000.0f) continue;
+        if (t[2] < -60000.0f || t[2] > 60000.0f) continue;
+        if (t[0] > -1.0f && t[0] < 1.0f && t[1] > -1.0f && t[1] < 1.0f) continue;
+        out[0] = t[0]; out[1] = t[1]; out[2] = t[2];
+        return TRUE;
+    }
+    return FALSE;
 }
 
 static VOID RebuildEntAddrs(PEPROCESS proc, U64 arrVa, const float cam[3], U64 wantVt)
@@ -1492,11 +1512,7 @@ static ULONG RefreshEntPositions(PEPROCESS proc, const float cam[3], float out[]
         float p[3];
         float dx, dy, dz;
         UCHAR blk[0x520];
-        if (!NT_SUCCESS(MemRead(proc, g_entAddr[i] + 0x978, p, 12))) continue;
-        if (p[0] != p[0] || p[1] != p[1] || p[2] != p[2]) continue;
-        if (p[0] < -60000.0f || p[0] > 60000.0f) continue;
-        if (p[1] < -60000.0f || p[1] > 60000.0f) continue;
-        if (p[2] < -60000.0f || p[2] > 60000.0f) continue;
+        if (!ReadEntPos(proc, g_entAddr[i], p)) continue;
         dx = p[0]-cam[0]; dy = p[1]-cam[1]; dz = p[2]-cam[2];
         if (dx*dx + dy*dy + dz*dz < 400.0f) continue;
         out[n][0] = p[0]; out[n][1] = p[1]; out[n][2] = p[2];
