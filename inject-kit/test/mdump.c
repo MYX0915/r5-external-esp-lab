@@ -390,10 +390,21 @@ static ULONG CollectRegions(PEPROCESS proc, REG* out, ULONG max, U64 minSz, U64 
 /* npc_dummie ???????????????????????:
  *   ?? 0x7FF78F520000 ? ?? 0x7FF792609330  ? 0x30E9330
  *   ?? 0x7FF6ECD60000 ? ?? 0x7FF6EFE49330  ? 0x30E9330 */
-#define RVA_VT_NPC_DUMMIE 0x30E9330ULL
+#define RVA_VT_NPC_DUMMIE 0x30E9330ULL   /* ?????? */
+#define RVA_VT_PLAYER     0x316930ULL    /* ??????????? +0x978? */
 static U64 modBaseForNpc = 0;
-static U64 g_vtExtra = 0;   /* ???????????? npc_dummie? */
+static U64 g_vtExtra  = 0;  /* ??? 1??????? (RVA 0x30E9330) */
+static U64 g_vtExtra2 = 0;  /* ??? 2???????? (RVA 0x316930) */
 static ULONG g_vtManual = 0; /* vt2 ??????????? */
+/* ---- ??????????????????????? ---- */
+static ULONG g_autoGlow  = 1;    /* ???? */
+static ULONG g_autoRow   = 50;   /* ?????????postProcess=1? */
+static U64   g_glowCache[64];
+static ULONG g_glowCacheN = 0;
+/* ???????????? #39FF14 */
+static float g_autoR = 0.22f;
+static float g_autoG = 1.00f;
+static float g_autoB = 0.08f;
 
 /* one-shot closed loop for NPC hunting:
    read the entity array, pick N instances, dump them, sleep 2s, dump them again.
@@ -893,7 +904,30 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                     UCHAR* le = p;
                     while (le < end && *le != '\r' && *le != '\n') le++;
                     if (le > p) {
-                        if ((p[0] == 'v' || p[0] == 'V') && (p[1] == 't' || p[1] == 'T') && p[2] == '2') {
+                        if ((p[0] == 'g' || p[0] == 'G') && (p[1] == 'l' || p[1] == 'L') && (p[2] == 'o' || p[2] == 'O') && (p[3] == 'w' || p[3] == 'W') && (p[4] == 'a' || p[4] == 'A')) {
+                            const UCHAR* qg = p + 5;
+                            ULONG on = 0, rw = 0; BOOLEAN s1 = FALSE, s2 = FALSE;
+                            while (qg < le && *qg == ' ') qg++;
+                            while (qg < le) { UCHAR c = *qg;
+                                if (c >= '0' && c <= '9') { on = on * 10 + (c - '0'); s1 = TRUE; }
+                                else break; qg++; }
+                            while (qg < le && *qg == ' ') qg++;
+                            while (qg < le) { UCHAR c = *qg;
+                                if (c >= '0' && c <= '9') { rw = rw * 10 + (c - '0'); s2 = TRUE; }
+                                else break; qg++; }
+                            if (s1) { g_autoGlow = on ? 1 : 0; g_glowCacheN = 0; }
+                            if (s2 && rw < 256) { g_autoRow = rw; g_glowCacheN = 0; }
+                            {
+                                float cr = ParseF(&qg, le), cg = ParseF(&qg, le), cb = ParseF(&qg, le);
+                                if (cr >= 0.0f && cg >= 0.0f && cb >= 0.0f) {
+                                    g_autoR = cr; g_autoG = cg; g_autoB = cb;
+                                }
+                            }
+                            KF("[mdump] glowauto on=%lu row=%lu rgb=(%ld,%ld,%ld) [x100]\n",
+                               g_autoGlow, g_autoRow,
+                               (long)(g_autoR*100),(long)(g_autoG*100),(long)(g_autoB*100));
+                        }
+                        else if ((p[0] == 'v' || p[0] == 'V') && (p[1] == 't' || p[1] == 'T') && p[2] == '2') {
                             const UCHAR* qv = p + 3;
                             U64 vv = 0; BOOLEAN sv = FALSE;
                             while (qv < le && *qv == ' ') qv++;
@@ -904,7 +938,7 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                                     else if ((c|0x20) >= 'a' && (c|0x20) <= 'f') d = (c|0x20) - 'a' + 10;
                                     else break; vv = vv * 16 + d; qv++; sv = TRUE; }
                             }
-                            if (sv) { g_vtExtra = vv; g_vtManual = 1; KF("[mdump] vt2 set 0x%llX (manual)\n", vv); }
+                            if (sv) { g_vtExtra = vv; g_vtExtra2 = 0; g_vtManual = 1; KF("[mdump] vt2 set 0x%llX (manual)\n", vv); }
                             else K("[mdump] vt2: bad args\n");
                         }
                         else if ((p[0] == 'a' || p[0] == 'A') && (p[1] == 'r' || p[1] == 'R') && (p[2] == 'r' || p[2] == 'R')) {
@@ -1356,13 +1390,13 @@ static ULONG ScanWorldPos(PEPROCESS proc, U64 arrVa, const float cam[3], float o
             if (!inst || inst < 0x10000 || (inst >> 47)) continue;
             if (!NT_SUCCESS(MemRead(proc, inst + 0x978, p, 12))) continue;
             if (p[0] != p[0] || p[1] != p[1] || p[2] != p[2]) continue;
-            if (p[0] < -40000.0f || p[0] > 40000.0f) continue;
-            if (p[1] < -40000.0f || p[1] > 40000.0f) continue;
-            if (p[2] < -40000.0f || p[2] > 40000.0f) continue;
+            if (p[0] < -60000.0f || p[0] > 60000.0f) continue;
+            if (p[1] < -60000.0f || p[1] > 60000.0f) continue;
+            if (p[2] < -60000.0f || p[2] > 60000.0f) continue;
             if (p[0] > -1.0f && p[0] < 1.0f && p[1] > -1.0f && p[1] < 1.0f) continue;
             dx = p[0]-cam[0]; dy = p[1]-cam[1]; dz = p[2]-cam[2];
             d2 = dx*dx + dy*dy + dz*dz;
-            if (d2 < 2500.0f || d2 > 100000000.0f) continue;
+            if (d2 < 400.0f || d2 > 4.0e9f) continue;   /* 0.4m ~ 1100m???????? */
             out[found][0] = p[0]; out[found][1] = p[1]; out[found][2] = p[2];
             found++;
         }
@@ -1420,17 +1454,17 @@ static VOID RebuildEntAddrs(PEPROCESS proc, U64 arrVa, const float cam[3], U64 w
              * ???????????????? */
             if (wantVt) {
                 if (!NT_SUCCESS(MemRead(proc, inst, &vt, 8)) || !vt) continue;
-                if (vt != wantVt && !(g_vtExtra && vt == g_vtExtra)) continue;
+                if (vt != wantVt && vt != g_vtExtra && vt != g_vtExtra2) continue;
             }
             if (!NT_SUCCESS(MemRead(proc, inst + 0x978, p, 12))) continue;
             if (p[0] != p[0] || p[1] != p[1] || p[2] != p[2]) continue;
-            if (p[0] < -40000.0f || p[0] > 40000.0f) continue;
-            if (p[1] < -40000.0f || p[1] > 40000.0f) continue;
-            if (p[2] < -40000.0f || p[2] > 40000.0f) continue;
+            if (p[0] < -60000.0f || p[0] > 60000.0f) continue;
+            if (p[1] < -60000.0f || p[1] > 60000.0f) continue;
+            if (p[2] < -60000.0f || p[2] > 60000.0f) continue;
             if (p[0] > -1.0f && p[0] < 1.0f && p[1] > -1.0f && p[1] < 1.0f) continue;
             dx = p[0]-cam[0]; dy = p[1]-cam[1]; dz = p[2]-cam[2];
             d2 = dx*dx + dy*dy + dz*dz;
-            if (d2 < 2500.0f || d2 > 100000000.0f) continue;
+            if (d2 < 400.0f || d2 > 4.0e9f) continue;   /* 0.4m ~ 1100m???????? */
             if (found < 256) {
                 s_candAddr[found] = inst;
                 s_candDist[found] = d2;
@@ -1460,11 +1494,11 @@ static ULONG RefreshEntPositions(PEPROCESS proc, const float cam[3], float out[]
         UCHAR blk[0x520];
         if (!NT_SUCCESS(MemRead(proc, g_entAddr[i] + 0x978, p, 12))) continue;
         if (p[0] != p[0] || p[1] != p[1] || p[2] != p[2]) continue;
-        if (p[0] < -40000.0f || p[0] > 40000.0f) continue;
-        if (p[1] < -40000.0f || p[1] > 40000.0f) continue;
-        if (p[2] < -40000.0f || p[2] > 40000.0f) continue;
+        if (p[0] < -60000.0f || p[0] > 60000.0f) continue;
+        if (p[1] < -60000.0f || p[1] > 60000.0f) continue;
+        if (p[2] < -60000.0f || p[2] > 60000.0f) continue;
         dx = p[0]-cam[0]; dy = p[1]-cam[1]; dz = p[2]-cam[2];
-        if (dx*dx + dy*dy + dz*dz < 2500.0f) continue;
+        if (dx*dx + dy*dy + dz*dz < 400.0f) continue;
         out[n][0] = p[0]; out[n][1] = p[1]; out[n][2] = p[2];
         /* ??? 0x520 ???????????+0x18C ~ +0x69C? */
         RtlZeroMemory(info[n].Name, sizeof(info[n].Name));
@@ -1576,11 +1610,59 @@ static BOOLEAN TryReattach(void)
     g_espProc = np;
     g_modBase = nb;
     if (!g_vtManual) {
-        g_vtExtra = nb + RVA_VT_NPC_DUMMIE;
-        KF("[mdump] vtExtra reattach = 0x%llX\n", g_vtExtra);
+        g_vtExtra  = nb + RVA_VT_NPC_DUMMIE;
+        g_vtExtra2 = nb + RVA_VT_PLAYER;
+        KF("[mdump] vtExtra reattach = 0x%llX / 0x%llX\n", g_vtExtra, g_vtExtra2);
     }
     KF("[mdump] reattached pid=%lu base=0x%llX\n", pid, nb);
     return TRUE;
+}
+
+
+/* ??????????????
+ * ???????? parity???????????? contexts/focused/fade? */
+static VOID AutoGlowAll(PEPROCESS proc)
+{
+    UCHAR row = (UCHAR)(g_autoRow & 0xFF);
+    ULONG one = 1;
+    float fd = 1.0f;
+    ULONG i, j, newN = 0;
+    U64 newCache[64];
+
+    if (!g_autoGlow || !proc) return;
+
+    /* ??????????/??????????? 240ms ???? */
+    if (modBaseForNpc) {
+        U64 tbl = 0, entry;
+        if (NT_SUCCESS(MemRead(proc, modBaseForNpc + RVA_HIGHLIGHT_GLOBAL, &tbl, 8)) && tbl) {
+            entry = tbl + (U64)g_autoRow * 0x34ULL;
+            MemWrite(proc, entry + 0x04, &g_autoR, 4);
+            MemWrite(proc, entry + 0x08, &g_autoG, 4);
+            MemWrite(proc, entry + 0x0C, &g_autoB, 4);
+        }
+    }
+
+    for (i = 0; i < g_entAddrCount && newN < 64; i++) {
+        U64 e = g_entAddr[i];
+        BOOLEAN seen = FALSE;
+        if (!e) continue;
+        for (j = 0; j < g_glowCacheN; j++) {
+            if (g_glowCache[j] == e) { seen = TRUE; break; }
+        }
+        MemWrite(proc, e + 0x2A0, &row, 1);
+        MemWrite(proc, e + 0x2A8, &one, 4);
+        MemWrite(proc, e + 0x2AC, &fd, 4);
+        if (!seen) {
+            ULONG pv = 0;
+            if (NT_SUCCESS(MemRead(proc, e + 0x2B4, &pv, 4))) {
+                pv ^= 1;
+                MemWrite(proc, e + 0x2B4, &pv, 4);
+            }
+        }
+        newCache[newN++] = e;
+    }
+    for (i = 0; i < newN; i++) g_glowCache[i] = newCache[i];
+    g_glowCacheN = newN;
 }
 
 static VOID EspLoop(PEPROCESS proc, U64 modBase);
@@ -1632,6 +1714,7 @@ static VOID EspLoop(PEPROCESS proc0, U64 modBase0)
                 RebuildEntAddrs(proc, modBase + RVA_ENTITY_ARRAY, f.Cam, lvt);
             }
             g_entCount = RefreshEntPositions(proc, f.Cam, s_ent, f.Info, FEED_MAX_ENT, lvt);
+            if ((tick % 15) == 0) AutoGlowAll(proc);
             RtlCopyMemory(g_entList, s_ent, sizeof(s_ent));
         }
         f.Count = g_entCount;
@@ -1704,8 +1787,9 @@ static VOID Waiter(PVOID ctx)
         KF("[mdump] resident, module=0x%llX\n", modBase);
         modBaseForNpc = modBase;
         if (modBase && !g_vtManual) {
-            g_vtExtra = modBase + RVA_VT_NPC_DUMMIE;
-            KF("[mdump] vtExtra auto = 0x%llX\n", g_vtExtra);
+            g_vtExtra  = modBase + RVA_VT_NPC_DUMMIE;
+            g_vtExtra2 = modBase + RVA_VT_PLAYER;
+            KF("[mdump] vtExtra auto = 0x%llX / 0x%llX\n", g_vtExtra, g_vtExtra2);
         }
         g_espProc = proc;
         if (modBase) {

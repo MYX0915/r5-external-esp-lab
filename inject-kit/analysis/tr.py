@@ -1,11 +1,13 @@
-import struct, glob, os
-ents=["12E66E7C0","12E66FE40","12E6714C0","12E672B40","12E6741C0","12E675840"]
-lines=[]
-for e in ents:
-    f=r"C:\ProgramData\scdump\9_%s.bin" % e
-    raw=open(f,"rb").read()
-    p0=struct.unpack_from("<Q", raw, 0xB0)[0]
-    p1=struct.unpack_from("<Q", raw, 0xB8)[0]
-    print("%s  +0xB0=0x%X  +0xB8=0x%X" % (e,p0,p1))
-    lines.append("0x%X 0x1000"%p0)
-open("tr.txt","w").write("\n".join(lines))
+import struct, math
+f=open(r"C:\ProgramData\sc_feed.bin","rb").read()
+pos=struct.unpack_from("<3f",f,32); ang=struct.unpack_from("<3f",f,20)
+cnt=struct.unpack_from("<I",f,44)[0]; ok=struct.unpack_from("<I",f,48)[0]
+print("ok=%d count=%d" % (ok,cnt))
+print("??: (%.1f,%.1f,%.1f)" % pos)
+for k in range(min(cnt,24)):
+    base=352+k*40
+    hp,hpm,sh,shm=struct.unpack_from("<4I",f,base)
+    team,life,nlen,flags=struct.unpack_from("<4B",f,base+16)
+    e=struct.unpack_from("<3f",f,64+k*12)
+    d=math.sqrt((e[0]-pos[0])**2+(e[1]-pos[1])**2+(e[2]-pos[2])**2)*0.01905
+    print("  [%2d] %6.1fm hp=%d sh=%d team=%d" % (k,d,hp,sh,team))

@@ -1,5 +1,5 @@
 import struct
 f=open(r"C:\ProgramData\sc_feed.bin","rb").read()
 inst=struct.unpack_from("<Q",f,56)[0]
-print("current inst=0x%X" % inst)
-open("me4.txt","w").write("0x%X 0x4000\n"%inst)
+open("me.txt","w").write("0x%X"%inst)
+print("???? 0x%X" % inst)
