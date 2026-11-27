@@ -6929,3 +6929,135 @@ deepwiki：全部读不到（三种方式均失败）
 但拿到了它摘要的原始内容 —— 作弊脚本源码本身
 结果比读 deepwiki 更直接、更完整
 ```
+
+
+---
+
+## 125. 可用情报汇总 + 一键校验脚本（2026-11-27 16:26）
+
+### 125.1 从 VPK 源码里提炼出的可用情报
+
+| 情报 | 来源函数 | 对我们的价值 |
+|---|---|---|
+| **敌方血量确实在客户端** | `ReconScan_ShowHudForTarget(player, enemy, false)` | 新方向：找 reconScan 数据结构，而不是在实体上找 hp |
+| **引擎有按队伍过滤的敌人列表** | `GetPlayerArrayOfEnemies(team)` / `..._Alive(team)` | 确认队伍信息存在，可用于敌我区分 |
+| **小地图有敌人标记的数据结构** | `Minimap_AddEnemyToMinimap(enemy)` / `Minimap_CommonTrackEntOrigin(rui, enemy, true)` | 确认引擎维护每个玩家的地图标记 |
+| **引擎暴露射线检测** | `TraceLine(start, end, ignore, mask, group, owner)` | 与我们的命中判定对照 |
+| **引擎暴露准星下实体** | `GetTargetUnderCrosshair()` | 与我们的 PickTarget 对照 |
+| **RUI 系统** | `RuiCreate` / `RuiDestroy` / `RuiDestroyIfAlive` | 游戏自己的 2D 绘制系统 |
+
+**最重要的一条**：`ReconScan_ShowHudForTarget` 证明**敌方血量在客户端内存里存在**，
+只是不在我们读的实体字段（+0x330 hp / +0x18C shield）上，
+而在技能系统（reconScan）的数据结构里。
+
+这与第 115 节「Apex 不同步敌方血量」**不矛盾**：
+那条结论针对的是**实体 NetVar**，而 reconScan 走的是另一条数据路径。
+
+### 125.2 雷达实现（原文）
+
+```squirrel
+// 小地图雷达
+array<entity> aliveEnemies = GetPlayerArrayOfEnemies_Alive(team);
+foreach( entity enemy in aliveEnemies ) {
+    var fRui = Minimap_AddEnemyToMinimap(enemy);
+    Minimap_CommonTrackEntOrigin(fRui, enemy, true);
+}
+wait 5.0;
+```
+
+```squirrel
+// 全图雷达
+if( Fullmap_IsVisible() == false ) { wait 0.5; continue; }
+foreach( var ruiToDestroy in fullMapRuis ) { Fullmap_RemoveRui(rui); RuiDestroy(rui); }
+```
+
+### 125.3 一键校验脚本 verify.ps1
+
+`inject-kit/verify.ps1`（取代之前的 glowtest.ps1），语法检查通过。
+
+**执行顺序**（必须按此顺序）：
+
+```
+① 重启电脑
+② 双击 inject-kit\启动.cmd        ← 驱动必须先于游戏映射
+③ 启动 Apex → 进入训练场
+④ cd inject-kit ; .\verify.ps1
+```
+
+**脚本做的事**
+
+```
+[0] 前置检查
+      驱动实例数 = 1 / 游戏运行 / 日志有 esp loop start
+      枚举假人实体，取第一个做测试对象
+
+[1] 骨骼
+      bonescan <dummy>  → sc_bonescan.txt
+      输出：命中的字段偏移 / 数组地址 / stride / 原点 / 头部 / 身高
+
+[2] 高亮第 1 步
+      glowfields <dummy>  → 0x1D4 / 0x1E4 是否非零
+      glowdump 50         → 行 50 原生 functionBits / Flags / DrawFunc
+      glowfind            → 空闲行清单
+
+[3] 配置并写入
+      glowclone 50 <空闲行>
+      glowrow <空闲行> 0 0 1        ← 纯蓝
+      glowteam 0 0                  ← -Team 开关
+      只对单个假人写四步
+
+[4] 打印人工判定清单
+```
+
+**参数**
+
+```powershell
+.\verify.ps1                    # 全部
+.\verify.ps1 -SkipHighlight     # 只跑骨骼
+.\verify.ps1 -Team              # 同时解除队伍过滤
+.\verify.ps1 -Row 200           # 指定样式行
+```
+
+### 125.4 校验判据（缺一不可）
+
+**骨骼**
+
+```
+□ bonescan 命中（hits > 0）
+□ 命中的 h=（head.z - origin.z）在 60~80 单位
+□ 若 stride 0x30/0x40 都不命中 → 试 0x20 / 0x48 / 0x60
+```
+
+**高亮**
+
+```
+□ 0x1D4 / 0x1E4 是否非零（非零 ⇒ 队伍过滤是卡点）
+□ 行 50 的 Flags / DrawFunc 原生值是多少
+□ 蓝色剪影是否出现在 overlay 框住的【同一个假人】身上
+□ 颜色是否纯蓝（不是原生橙/红/黄）
+□ 关闭后是否立即消失
+□ 换另一个假人重复，结果是否一致
+```
+
+### 125.5 三种结果 → 下一步
+
+| 骨骼结果 | 高亮结果 | 下一步 |
+|---|---|---|
+| 命中且 h 合理 | 剪影重合 | 两者都通，进对局验证距离/墙后 |
+| 命中但 h 不合理 | — | 索引表与当前模型不匹配，需重新导出 |
+| 全部不命中 | — | stride 换 0x20/0x48/0x60；仍不行则骨骼数组不在实体指针链上 |
+| — | 剪影重合 | 高亮跑通，再用 glowteam 测队伍过滤影响 |
+| — | 无剪影 | 卡点 A（渲染队列类型过滤）→ 改用真实玩家试；卡点 B（行字段）→ glowdump 对比 |
+
+### 125.6 当前待验证清单（合并）
+
+```
+[ ] 重启加载驱动 50688 字节（2026-11-27 15:16:53）
+[ ] verify.ps1 第 0 步通过
+[ ] bonescan 是否命中，h 是否合理
+[ ] glowfields 的 0x1D4 / 0x1E4 原生值
+[ ] glowdump 50 的 Flags / DrawFunc 原生值
+[ ] 单假人写入后剪影是否重合
+[ ] glowteam 0 0 对结果的影响
+[ ] 换图/重置回合后日志是否出现 glowrow reclaimed
+```
