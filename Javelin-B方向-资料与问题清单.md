@@ -6543,3 +6543,128 @@ if (+0x2C 的 Flags != 期望值 || +0x30 的 DrawFunc != 期望值) {
 · 训练场验证通过 → 再进对局；对局里仍要按 121.4 的判据复查
 · 骨骼（第 119 节）同样按此标准：bonescan 命中 + 身高比例正确才算成功
 ```
+
+
+---
+
+## 122. 用本版本偏移表裁定 selector 悬案（2026-11-27 15:17）
+
+### 122.1 权威来源
+
+`refs/apex-offsets-latest.txt`（本版本全量偏移表）第 770~776 行：
+
+```
+[DT_HighlightSettings]
+m_highlightFadeDuration    = 0x2ac
+m_highlightFadeParity      = 0x2b4
+m_highlightFocused         = 0x2a8
+m_highlightGenericContexts = 0x2a0
+m_highlightTeamBits        = 0x1e4
+m_highlightTeamIndex       = 0x1d4
+```
+
+**只有 6 个字段，没有 selector。**
+
+`DT_BaseEntity` 段里同样有 `m_highlightGenericContexts = 0x2a0`（第 668 行附近），
+说明实体是从 BaseEntity 继承这套结构，**实体 +0x2A0 就是 highlight contexts，没有歧义**。
+
+### 122.2 结论：本 build 没有独立 selector
+
+UC 帖的 `+0x294 selector` 是他那个 build 的字段，**本 build 不存在**。
+本 build 的渲染器直接从 `m_highlightGenericContexts[0]` + `m_highlightFocused` bit0 解析行号。
+
+所以我们**最初的 4 步写法是正确且完整的**：
+
+```c
+MemWrite(e + 0x2A0, &row, 1);   /* m_highlightGenericContexts[0] */
+MemWrite(e + 0x2A8, &one, 4);   /* m_highlightFocused bit0 */
+MemWrite(e + 0x2AC, &fd,  4);   /* m_highlightFadeDuration = 1.0 */
+MemWrite(e + 0x2B4, &pv,  4);   /* m_highlightFadeParity ^= 1 */
+```
+
+### 122.3 撤销第 120 节的错误推断
+
+第 120 节基于「UC 帖有 selector，我们按 0x0B 移位推测在 0x29F」加了：
+
+```c
+static ULONG g_selOff = 0x2A0;
+static ULONG g_ctxOff = 0x2A1;   /* ← 错误：会污染 contexts[1] */
+```
+
+现已修正为：
+
+```c
+static ULONG g_selOff = 0x2A0;   /* 与 ctx 同字节 */
+static ULONG g_ctxOff = 0x2A0;   /* contexts[0] */
+```
+
+两次写同一字节是幂等的，无害。
+
+### 122.4 为什么之前会把 0x294 搞错
+
+偏移表里有两套「同数值不同基址」的字段：
+
+```
+[DT_HighlightSettings]  （相对实体，因为 BaseEntity 继承）
+    m_highlightGenericContexts = 0x2a0
+    m_highlightFocused         = 0x2a8
+
+[DT_Local] / [C_PlayerLocalData]  （相对 C_PlayerLocalData 子结构）
+    m_playerLocalGravityType      = 0x2a0
+    m_playerLocalGravityPoint     = 0x2a4
+    m_playerLocalGravityLineStart = 0x2b0
+```
+
+**数值相同，但基址不同。** 早前看到 `0x294` 在 DT_Local 里是重力相关字段，
+就断言「本 build 的 0x294 不是 highlight」——这个结论对实体而言成立，
+但不能据此说 highlight 结构里一定有 selector。
+
+### 122.5 两个新发现的字段
+
+| 字段 | 偏移 | 可能的作用 |
+|---|---|---|
+| `m_highlightTeamIndex` | `0x1d4` | 队伍索引 |
+| `m_highlightTeamBits` | `0x1e4` | 队伍位掩码 |
+
+这两个很可能参与**队伍过滤**：如果高亮只对特定队伍生效，
+就解释了「为什么只有部分实体出剪影」。
+
+新增命令试用：
+
+```
+glowteam 0 0        # 索引 0、位掩码 0 = 不限队伍
+```
+
+默认不碰这两个字段（`0xFFFFFFFF` 表示跳过）。
+
+### 122.6 当前完整的实体写序列
+
+```c
+MemWrite(e + 0x2A0, &row, 1);                     /* contexts[0] */
+MemWrite(e + 0x2A8, &one, 4);                     /* focused bit0 */
+MemWrite(e + 0x2AC, &fd,  4);                     /* fadeDuration = 1.0 */
+MemWrite(e + 0x2B4, &pv,  4);                     /* parity ^= 1（仅首次） */
+if (g_teamIndex != -1) MemWrite(e + 0x1D4, &g_teamIndex, 4);   /* 可选 */
+if (g_teamBits  != -1) MemWrite(e + 0x1E4, &g_teamBits,  4);   /* 可选 */
+```
+
+### 122.7 对第 121 节判据的补充
+
+第 121 节把剪影降级为「未确认」仍然有效。
+但第 122 节是**静态结构证据**，不依赖剪影，所以：
+
+```
+✅ 可以确定：offsets 正确、字段名正确、我们的写序列与 DT 定义一致
+❌ 不能确定：写完之后画面里到底会不会出现轮廓（仍需 121.4 的实验验证）
+```
+
+结构对了 ≠ 效果出来了。两者必须分开判断。
+
+### 122.8 待验证（不变）
+
+```
+[ ] 重启加载新驱动（50688 字节，2026-11-27 15:16:53）
+[ ] glowfields 0x<dummy>  → 看 0x1D4/0x1E4 有没有非零值（队伍过滤线索）
+[ ] glowdump <row>        → 确认行内 functionBits / Flags / DrawFunc 原生值
+[ ] 按 121.4 判据做单变量实验
+```

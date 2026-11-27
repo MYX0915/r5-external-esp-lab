@@ -407,11 +407,24 @@ static ULONG g_autoGlow  = 1;    /* ???? */
 static ULONG g_autoFlags = GLOW_DEFAULT_FLAGS;
 /* 实体侧 selector 偏移：不同 build 可能不同，运行时用 glowsel 切换
  * 依据 UC 帖子：渲染器读 selector；只写 contexts[0] 不写 selector 永远不渲染 */
-static ULONG g_selOff  = 0x2A0;
-static ULONG g_ctxOff  = 0x2A1;   /* contexts[0]，selector 后面一个字节 */
+/* 本 build 的权威布局（refs/apex-offsets-latest.txt 的 [DT_HighlightSettings]）：
+ *   m_highlightGenericContexts = 0x2a0   contexts[0] 在第一字节，本 build 无独立 selector
+ *   m_highlightFocused         = 0x2a8
+ *   m_highlightFadeDuration    = 0x2ac
+ *   m_highlightFadeParity      = 0x2b4
+ *   m_highlightTeamIndex       = 0x1d4
+ *   m_highlightTeamBits        = 0x1e4
+ * UC 帖的 +0x294 selector 属于另一个 build，本 build 不存在，不要照抄。
+ */
+static ULONG g_selOff  = 0x2A0;   /* 与 ctx 同字节：无独立 selector */
+static ULONG g_ctxOff  = 0x2A0;   /* m_highlightGenericContexts[0] */
 static ULONG g_focusOff= 0x2A8;
 static ULONG g_parOff  = 0x2B4;
 static ULONG g_fadeOff = 0x2AC;
+static ULONG g_teamIdxOff  = 0x1D4;
+static ULONG g_teamBitsOff = 0x1E4;
+static ULONG g_teamIndex = 0xFFFFFFFFu;   /* 0xFFFFFFFF = 不碰 */
+static ULONG g_teamBits  = 0xFFFFFFFFu;
 static ULONG g_autoVis   = GLOW_DEFAULT_VIS;
 static ULONG g_autoRow   = 50;   /* ?????????postProcess=1? */
 static U64   g_glowCache[64];
@@ -1036,6 +1049,14 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                                 else break; ev = ev * 16 + d; qg++; got = TRUE; }
                             if (got) GlowFields(proc, ev);
                             else K("[mdump] glowfields: usage glowfields 0x<entity>\n");
+                        }
+                        else if (PrefixIs(p, le, "glowteam")) {
+                            const UCHAR* qgt = p + 8;
+                            ULONG bits = 0, idx = 0;
+                            if (ParseUOpt(&qgt, le, &idx) && ParseUOpt(&qgt, le, &bits)) {
+                                g_teamIndex = idx; g_teamBits = bits;
+                                KF("[mdump] glowteam index=%lu bits=0x%X\n", idx, bits);
+                            } else K("[mdump] glowteam: usage glowteam <index> <bits>  (0 0 = 不限队伍)\n");
                         }
                         else if (PrefixIs(p, le, "glowsel")) {
                             const UCHAR* qg = p + 7;
@@ -2032,10 +2053,10 @@ static VOID GlowFields(PEPROCESS proc, U64 ent)
     }
     /* 逐候选解释 */
     {
-        ULONG cand[10] = { 0x294, 0x295, 0x29D, 0x29F, 0x2A0, 0x2A1, 0x2A8, 0x2AC, 0x2B4, 0x2B8 };
-        for (i = 0; i < 10; i++) {
+        ULONG cand[13] = { 0x1D4, 0x1E4, 0x294, 0x29D, 0x29F, 0x2A0, 0x2A1, 0x2A4, 0x2A8, 0x2AC, 0x2B0, 0x2B4, 0x2B8 };
+        for (i = 0; i < 13; i++) {
             ULONG off = cand[i];
-            if (off - 0x280 + 4 > sizeof(buf)) continue;
+            if (off < 0x280 || off - 0x280 + 4 > sizeof(buf)) continue;
             {
                 ULONG d; float f;
                 UCHAR by = buf[off - 0x280];
@@ -2106,6 +2127,9 @@ static VOID AutoGlowAll(PEPROCESS proc)
         MemWrite(proc, e + g_ctxOff, &row, 1);
         MemWrite(proc, e + g_focusOff, &one, 4);
         MemWrite(proc, e + g_fadeOff, &fd, 4);
+        /* 队伍过滤：默认不动；glowteam 设置后写入（0 0 = 不限队伍） */
+        if (g_teamIndex != 0xFFFFFFFFu) MemWrite(proc, e + g_teamIdxOff,  &g_teamIndex, 4);
+        if (g_teamBits  != 0xFFFFFFFFu) MemWrite(proc, e + g_teamBitsOff, &g_teamBits,  4);
         if (!seen) {
             ULONG pv = 0;
             if (NT_SUCCESS(MemRead(proc, e + 0x2B4, &pv, 4))) {
