@@ -7208,3 +7208,161 @@ ReconScan_RemoveHudForTarget(player, enemy);
 [ ] m_bleedoutState 是否随倒地变化
 [ ] 若都不行 → 实现 xref 找 reconScanRUIs
 ```
+
+
+---
+
+## 127. 外部公开资料交叉核验结果 + 兜底工具（2026-11-27 16:34）
+
+### 127.1 被外部资料确认的（可以当事实用）
+
+**Glow / DT_HighlightSettings**
+
+```
+✅ m_highlightTeamIndex / m_highlightTeamBits 确实存在于 DT_HighlightSettings
+   作用就是渲染阶段的队伍过滤，不置零则跨阵营实体被过滤，不进高亮管线
+✅ 旧 DX11 build 有独立 selector，新 DX12 build 移除，直接复用
+   genericContexts[0] 作行索引 —— 这正是 UC 帖与我们 DT 矛盾的根源
+✅ m_highlightFadeParity 必须 toggle 异或，写死常数会被渲染器忽略
+✅ 结构体步长 0x34、color2、Flag/VIS 枚举
+```
+
+**血量链路**
+
+```
+✅ player.p.reconScanRUIs 是本地玩家上的 Dictionary<entity, rui_handle>
+✅ 扫描技能执行 ReconScan_ShowHudForTarget() 才插入条目
+✅ RUI 句柄内部缓存敌人的 healthFrac / shieldFrac
+✅ 实体 NetVar 的 m_iHealth 不下发敌方血量（恒 0）
+⇒ 血量是「技能系统缓存」，不是实体字段
+```
+
+**倒地状态**
+
+```
+✅ m_bleedoutState 独立于 m_lifeState
+   lifeState 只区分活/死，bleedoutState 专指「倒地可救援」，>0 即倒地
+✅ 不同版本偏移在 0x27a8 ~ 0x2830 浮动，语义不变
+```
+
+### 127.2 外部资料明确指出的限制（必须承认）
+
+| 限制 | 影响 |
+|---|---|
+| **公开偏移数字不能照抄** | RecvTable 每次大版本整体平移，只采信字段名与语义 |
+| **reconScanRUIs 有前提** | 没被扫描 / 没受伤的敌人，字典里没条目 → 读不到 |
+| **敌人离开视野条目会被清** | 血量数据随之消失 |
+| **m_damageComboStartHealth 是机会性读数** | 只在造成伤害的短窗口内更新，敌人脱视野会重置，**不能当主力血量源** |
+| **引擎渲染收集队列是否硬过滤实体类型** | 不在 RecvTable，无公开文档，**只能本地实测** |
+| **RUI 对象内存布局无公开结构** | 只能自己指针扫描反推 |
+
+### 127.3 这直接修正了我们的预期
+
+```
+❌ 不能期待「无条件读取所有敌人血量」
+✅ 只能得到「被扫描过 / 刚被打过」的敌人血量
+✅ 倒地状态（bleedoutState）反而是无条件可读的
+```
+
+**结论**：血量是**加分项**，不是基础项。overlay 的健康条应该：
+- 有数据时显示（reconScan / damageCombo 命中过）
+- 无数据时显示 `--`，不能显示 0（避免误导）
+
+这和第 116 节「敌方血量不可获取」的结论衔接：
+更准确的说法是「**默认不可得，条件满足时可得**」。
+
+### 127.4 新增兜底工具（已在驱动里）
+
+**`xref 0x<base> <size> 0x<value>`**
+
+在 `[base, base+size)` 里搜指定 8 字节值，输出所有命中地址到 `sc_xref.txt`。
+
+**`finddict 0x<playerVa> 0x<e1> 0x<e2> [0x<e3> ...]`**
+
+在本地玩家内存（0x20000 范围）里找「**同时包含多个敌人实体指针**」的位置。
+对每个 `e1` 命中处，检查 ±0x400 内是否出现 e2/e3/e4，统计匹配次数。
+
+**为什么这个特征有效**：IL2CPP 的 `Dictionary<TKey,TValue>` 布局是
+
+```
++0x10 buckets (int[])
++0x18 entries (Entry[])
++0x20 count
+Entry: int hashCode; int next; TKey key; TValue value;   // 步长 0x18，key 在 +0x08
+```
+
+⇒ `Dictionary<entity, rui>` 的 entries 数组里，**多个敌人实体指针会以 0x18 为间隔出现**。
+这比盲搜强得多。
+
+### 127.5 血量兜底流程（DT 字段失效时走这条）
+
+```
+1. 进对局，拿到本地玩家实体 + 至少 2 个敌人实体
+2. finddict <player> <enemy1> <enemy2>
+3. 看强候选（strong 计数）
+4. 对候选地址 dump 周边内存，确认 steps 0x18
+5. 顺藤摸到 RUI 对象，找 healthFrac / shieldFrac（float 0~1）
+6. 用 xref 反查该 RUI 的引用位置
+```
+
+### 127.6 完整验证流程（三条线 + 兜底）
+
+```
+【线 1】Glow
+  □ glowfields <dummy>            看 0x1D4 / 0x1E4 原生值
+  □ glowdump 50                   看原生 Flags / DrawFunc
+  □ glowfind                      找空闲行
+  □ clone 50 → glowrow 纯蓝 → glowteam 0 0 → 单实体四步
+  □ 判据：剪影与 overlay 框重合 / 关掉消失 / 换实体复现
+
+【线 2】骨骼
+  □ bonescan <dummy>              hits>0 且 h 在 60~80
+  □ 不中 → stride 试 0x20 / 0x48 / 0x60
+
+【线 3】血量（基准）
+  □ hptest <dummy>                m_iHealth 应为 100（确认链路通）
+  □ m_bleedoutState 应为 0
+
+【线 3b】血量（对局实测）
+  □ 打敌人后 hptest 该敌人
+  □ m_damageComboStartHealth 是否非零且随伤害递减
+  □ 若恒 0 → 走 127.5 的 finddict 兜底
+```
+
+### 127.7 核心原则（写进文档反复提醒自己）
+
+```
+DT / RecvTable 结构体正确  =  必要条件
+画面 + 内存运行时现象      =  充分条件
+
+两者必须分开判断，不能因为结构对了就认为功能通了
+（这就是第 121 节把橙色剪影降级的同一原则）
+```
+
+### 127.8 当前状态
+
+```
+游戏      Apex 目录存在但为空，仍在下载中
+驱动      mdump.sys 55808 字节 2026-11-27 16:34:17（需重启）
+脚本      verify.ps1 已含三条线
+文档      127 节
+```
+
+下载完成后的执行顺序：
+
+```
+① 重启
+② 启动.cmd
+③ 开 Apex 进训练场
+④ .\verify.ps1
+```
+
+### 127.9 待验证
+
+```
+[ ] 三条线的基准数据
+[ ] glowteam 0 0 对跨阵营渲染的影响
+[ ] damageCombo 是否可作为机会性血量源
+[ ] 若不行，finddict 能否定位 reconScanRUIs
+[ ] bleedoutState 是否可用于倒地标记
+```

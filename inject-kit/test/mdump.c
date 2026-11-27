@@ -634,6 +634,8 @@ static VOID GlowColorRow(PEPROCESS proc, U64 globalVa, ULONG row, float r, float
 static BOOLEAN PrefixIs(const UCHAR* p, const UCHAR* end, const char* tag);
 static float FabsF(float v);
 static VOID HpTest(PEPROCESS proc, U64 ent);
+static VOID XrefScan(PEPROCESS proc, U64 base, ULONG size, U64 value);
+static VOID FindDict(PEPROCESS proc, U64 base, ULONG size, U64* vals, ULONG nvals);
 static VOID GlowFields(PEPROCESS proc, U64 ent);
 static VOID BoneScan(PEPROCESS proc, U64 ent);
 static VOID BoneDump(PEPROCESS proc, U64 base, ULONG stride, ULONG idx);
@@ -1040,6 +1042,48 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                         }
 
 
+
+                        else if (PrefixIs(p, le, "xref")) {
+                            const UCHAR* qx = p + 4;
+                            U64 bv = 0, vv = 0; ULONG sz = 0x10000;
+                            BOOLEAN ok = FALSE;
+                            while (qx < le && *qx == ' ') qx++;
+                            if (qx + 1 < le && qx[0] == '0' && (qx[1] == 'x' || qx[1] == 'X')) qx += 2;
+                            while (qx < le) { UCHAR c = *qx; U64 d;
+                                if (c >= '0' && c <= '9') d = c - '0';
+                                else if ((c|0x20) >= 'a' && (c|0x20) <= 'f') d = (c|0x20) - 'a' + 10;
+                                else break; bv = bv * 16 + d; qx++; }
+                            { ULONG t; if (ParseUOpt(&qx, le, &t)) sz = t; }
+                            ok = ParseUOpt(&qx, le, &vv) ? FALSE : FALSE;   /* 占位 */
+                            while (qx < le && *qx == ' ') qx++;
+                            if (qx + 1 < le && qx[0] == '0' && (qx[1] == 'x' || qx[1] == 'X')) qx += 2;
+                            while (qx < le) { UCHAR c = *qx; U64 d;
+                                if (c >= '0' && c <= '9') d = c - '0';
+                                else if ((c|0x20) >= 'a' && (c|0x20) <= 'f') d = (c|0x20) - 'a' + 10;
+                                else break; vv = vv * 16 + d; qx++; ok = TRUE; }
+                            (void)ok;
+                            if (bv) XrefScan(proc, bv, sz, vv);
+                            else K("[mdump] xref: usage xref 0x<base> <size> 0x<value>\n");
+                        }
+                        else if (PrefixIs(p, le, "finddict")) {
+                            const UCHAR* qd = p + 8;
+                            U64 vals[5]; ULONG n = 0;
+                            ULONG i;
+                            for (i = 0; i < 5; i++) vals[i] = 0;
+                            while (qd < le && n < 5) {
+                                while (qd < le && *qd == ' ') qd++;
+                                if (qd >= le) break;
+                                if (qd + 1 < le && qd[0] == '0' && (qd[1] == 'x' || qd[1] == 'X')) qd += 2;
+                                { U64 v = 0; BOOLEAN got = FALSE;
+                                  while (qd < le) { UCHAR c = *qd; U64 d;
+                                      if (c >= '0' && c <= '9') d = c - '0';
+                                      else if ((c|0x20) >= 'a' && (c|0x20) <= 'f') d = (c|0x20) - 'a' + 10;
+                                      else break; v = v * 16 + d; qd++; got = TRUE; }
+                                  if (got) vals[n++] = v; else break; }
+                            }
+                            if (n >= 2) FindDict(proc, vals[0], 0x20000, &vals[1], n - 1);
+                            else K("[mdump] finddict: usage finddict 0x<playerVa> 0x<e1> 0x<e2> [0x<e3> ...]\n");
+                        }
                         else if (PrefixIs(p, le, "hptest")) {
                             const UCHAR* qh = p + 6;
                             U64 ev = 0; BOOLEAN got = FALSE;
@@ -2145,6 +2189,111 @@ static VOID HpTest(PEPROCESS proc, U64 ent)
     WriteFileAt(L"\\??\\C:\\ProgramData\\sc_hp.txt", txt, (ULONG)(w - txt) + 1);
     KF("[mdump] hptest done ent=0x%llX\n", ent);
     ExFreePoolWithTag(txt, 'hptt');
+}
+
+
+/* ================= 指针扫描（找 reconScanRUIs 字典）================= */
+
+static VOID XrefScan(PEPROCESS proc, U64 base, ULONG size, U64 value)
+{
+    CHAR* txt;
+    CHAR* w;
+    PUCHAR buf;
+    ULONG off, hits = 0;
+    const ULONG CHUNK = 0x10000;
+
+    if (!size || size > 0x4000000) size = 0x10000;
+    buf = ExAllocatePool2(POOL_FLAG_NON_PAGED, CHUNK, 'xrfp');
+    txt = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x8000, 'xrft');
+    if (!buf || !txt) { if (buf) ExFreePool(buf); if (txt) ExFreePool(txt); return; }
+    RtlZeroMemory(txt, 0x8000); w = txt; w[0] = 0;
+    w = AppendFmt(w, txt + 0x8000, "xref base=0x%llX size=0x%X value=0x%llX\n", base, size, value);
+
+    for (off = 0; off < size; off += CHUNK) {
+        ULONG want = size - off; ULONG i;
+        SIZE_T got = 0;
+        NTSTATUS st;
+        if (want > CHUNK) want = CHUNK;
+        st = MmCopyVirtualMemory(proc, (PVOID)(ULONG_PTR)(base + off), PsGetCurrentProcess(),
+                                 buf, want, KernelMode, &got);
+        if (!NT_SUCCESS(st)) continue;
+        for (i = 0; i + 8 <= got; i += 8) {
+            U64 v;
+            RtlCopyMemory(&v, buf + i, 8);
+            if (v == value) {
+                w = AppendFmt(w, txt + 0x8000, "  hit +0x%X (abs 0x%llX)\n", off + i, base + off + i);
+                if (++hits >= 200) goto done;
+            }
+        }
+    }
+done:
+    w = AppendFmt(w, txt + 0x8000, "hits=%lu\n", hits);
+    WriteFileAt(L"\\??\\C:\\ProgramData\\sc_xref.txt", txt, (ULONG)(w - txt) + 1);
+    KF("[mdump] xref done hits=%lu\n", hits);
+    ExFreePool(buf);
+    ExFreePool(txt);
+}
+
+/* 在 [base, base+size) 里找同时包含多个目标指针的区域
+ * 命中后进一步检查 0x18 步长（IL2CPP Dictionary Entry: hashCode/next/key/value） */
+static VOID FindDict(PEPROCESS proc, U64 base, ULONG size, U64* vals, ULONG nvals)
+{
+    CHAR* txt;
+    CHAR* w;
+    PUCHAR buf;
+    ULONG off, strong = 0;
+    const ULONG CHUNK = 0x10000;
+
+    if (!size || size > 0x200000) size = 0x20000;
+    if (nvals == 0) return;
+    buf = ExAllocatePool2(POOL_FLAG_NON_PAGED, CHUNK, 'fdbp');
+    txt = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x8000, 'fdbt');
+    if (!buf || !txt) { if (buf) ExFreePool(buf); if (txt) ExFreePool(txt); return; }
+    RtlZeroMemory(txt, 0x8000); w = txt; w[0] = 0;
+    w = AppendFmt(w, txt + 0x8000, "finddict base=0x%llX size=0x%X nvals=%lu\n", base, size, nvals);
+    {
+        ULONG k;
+        for (k = 0; k < nvals; k++)
+            w = AppendFmt(w, txt + 0x8000, "  target[%lu]=0x%llX\n", k, vals[k]);
+    }
+
+    for (off = 0; off < size; off += CHUNK) {
+        ULONG want = size - off; ULONG i;
+        SIZE_T got = 0;
+        NTSTATUS st;
+        if (want > CHUNK) want = CHUNK;
+        st = MmCopyVirtualMemory(proc, (PVOID)(ULONG_PTR)(base + off), PsGetCurrentProcess(),
+                                 buf, want, KernelMode, &got);
+        if (!NT_SUCCESS(st)) continue;
+        for (i = 0; i + 8 <= got; i += 8) {
+            U64 v;
+            ULONG k, found = 0;
+            RtlCopyMemory(&v, buf + i, 8);
+            if (v != vals[0]) continue;
+            /* 附近 ±0x400 内找其它目标值 */
+            {
+                LONG d;
+                for (d = -0x400; d <= 0x400; d += 8) {
+                    LONG j = (LONG)i + d;
+                    U64 vv;
+                    if (j < 0 || j + 8 > (LONG)got) continue;
+                    RtlCopyMemory(&vv, buf + j, 8);
+                    for (k = 1; k < nvals; k++) if (vv == vals[k]) found++;
+                }
+            }
+            w = AppendFmt(w, txt + 0x8000,
+                          "  +0x%X (abs 0x%llX) 附近匹配其它目标 %lu 次\n",
+                          off + i, base + off + i, found);
+            if (found >= (nvals - 1)) strong++;
+            if (++strong > 60) goto done;
+        }
+    }
+done:
+    w = AppendFmt(w, txt + 0x8000, "strong=%lu （>=nvals-1 视为强候选）\n", strong);
+    WriteFileAt(L"\\??\\C:\\ProgramData\\sc_finddict.txt", txt, (ULONG)(w - txt) + 1);
+    KF("[mdump] finddict done strong=%lu\n", strong);
+    ExFreePool(buf);
+    ExFreePool(txt);
 }
 
 static VOID AutoGlowAll(PEPROCESS proc)
