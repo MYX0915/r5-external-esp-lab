@@ -7061,3 +7061,150 @@ foreach( var ruiToDestroy in fullMapRuis ) { Fullmap_RemoveRui(rui); RuiDestroy(
 [ ] glowteam 0 0 对结果的影响
 [ ] 换图/重置回合后日志是否出现 glowrow reclaimed
 ```
+
+
+---
+
+## 126. 血量读取：从技能数据路径反推 DT_Player 字段（2026-11-27 16:28）
+
+### 126.1 用户的判断是关键线索
+
+> 有一个人物技能打到人就能看见血量
+
+如果技能能显示敌人血量，**血量数据必然在客户端内存里**。
+第 115 节「Apex 不同步敌方血量」的结论针对的是**实体 NetVar 字段**，
+而技能走的是**另一条数据路径**。两者不矛盾。
+
+### 126.2 从 Squirrel 源码找到数据路径
+
+UC/Linux 脚本里的实现：
+
+```squirrel
+bool inList = (enemy in player.p.reconScanRUIs);
+ReconScan_ShowHudForTarget(player, enemy, false);
+ReconScan_RemoveHudForTarget(player, enemy);
+```
+
+`player.p.reconScanRUIs` = **玩家身上一个 Dictionary<entity, rui>**，
+每扫描一个敌人就往里塞一个条目，HUD 从该条目渲染血条。
+
+⇒ 血量值一定在 **RUI 对象**或**该条目的结构**里。
+
+### 126.3 偏移表里的对应字段（DT_Player）
+
+翻 `refs/apex-offsets-latest.txt` 的 `[DT_Player]` 段（173 个字段），
+把所有 health/shield/damage 相关字段挖出来：
+
+| 字段 | 偏移 | 说明 | 已知 |
+|---|---|---|---|
+| `m_iHealth` | `0x330` | 当前血量 | 敌方恒 0 |
+| `m_iMaxHealth` | `0x470` | 最大血量 | 同 0 |
+| `m_shieldHealth` | `0x18c` | 护盾 | 敌方恒 0 |
+| `m_shieldHealthMax` | `0x190` | 最大护盾 | 同 0 |
+| **`m_bleedoutState`** | **`0x27a8`** | **倒地状态** | **新发现** |
+| `m_bleedoutStartTime` | `0x27ac` | 倒地开始时间 | 新发现 |
+| `m_damageComboLatestUpdateTime` | `0x2964` | 连击最后更新时间 | 新发现 |
+| **`m_damageComboStartHealth`** | **`0x2968`** | **连击开始时记录的血量** | **新发现，最可疑** |
+| `m_shadowShieldActive` | `0x3030` | 暗影护盾激活 | 新发现 |
+| **`m_tempShieldHealth`** | **`0x3034`** | **临时护盾** | **新发现** |
+| **`m_extraShieldHealth`** | **`0x3038`** | **额外护盾** | **新发现** |
+| `m_extraShieldTier` | `0x303c` | 额外护盾等级 | 新发现 |
+
+### 126.4 为什么 `m_damageComboStartHealth` 最可疑
+
+伤害连击系统要做的事：**打出伤害时显示「本次连击总伤害」**。
+要算总伤害，必须先知道敌人的起始血量。
+
+```
+连击开始 → 记录 m_damageComboStartHealth
+每次命中 → m_damageComboLatestUpdateTime 更新
+显示    → 用 start - current 算总伤害
+```
+
+**如果这条链路在客户端成立，那服务器必然下发过敌方血量**，
+否则客户端根本无法计算。
+
+而且它带 `LatestUpdateTime`，说明这个值**在连击过程中持续更新**——
+很可能每次命中都刷新为「当前血量」，那就等于直接给了我们血量读数。
+
+### 126.5 新增 hptest 命令
+
+`hptest 0x<entity>` —— 一次性 dump 上述 14 个字段：
+
+```
++0x0330 m_iHealth                        100
++0x0470 m_iMaxHealth                     100
++0x018C m_shieldHealth                   0
++0x0190 m_shieldHealthMax                0
++0x0340 m_iTeamNum                       97
++0x0698 m_lifeState                      0
++0x27A8 m_bleedoutState                  0
++0x27AC m_bleedoutStartTime              0.000
++0x2964 m_damageComboLatestUpdateTime    0.000
++0x2968 m_damageComboStartHealth         0
++0x3030 m_shadowShieldActive             0
++0x3034 m_tempShieldHealth               0
++0x3038 m_extraShieldHealth              0
++0x303C m_extraShieldTier                0
+```
+
+输出到 `C:\ProgramData\sc_hp.txt`。
+
+### 126.6 验证设计（分两个阶段）
+
+**阶段 1：训练场基准**
+
+```
+对假人执行 hptest
+判据：m_iHealth 应该 = 100，m_iMaxHealth = 100，m_iTeamNum = 97
+目的：确认偏移正确、读取链路正常
+```
+
+**阶段 2：对局实测（关键）**
+
+```
+1. 进对局，找到敌人实体
+2. 打他几枪
+3. 立即 hptest 该敌人
+4. 观察 m_damageComboStartHealth 和 m_tempShieldHealth
+
+可能结果：
+  A. m_damageComboStartHealth 变成非零且随伤害递减
+     ⇒ 这就是血量源，直接接进 overlay
+  B. 只在被打中的瞬间非零，随后归零
+     ⇒ 需要高频轮询（16ms 一次）捕捉
+  C. 恒为 0
+     ⇒ 血量不在 DT_Player 里，必须去找 reconScanRUIs 的 RUI 对象
+```
+
+### 126.7 如果 DT_Player 里没有（结果 C）
+
+下一条路：**在本地玩家身上找 `reconScanRUIs` 这个 Dictionary**。
+
+方法：
+
+```
+1. 拿到本地玩家实体 + 若干敌人实体地址
+2. 扫描本地玩家 0x0~0x8000，找「包含敌人实体指针的集合」
+3. 那些位置里，Dictionary<entity, rui> 的 entries 数组会以
+   敌人实体指针作为 key 出现
+4. 顺藤摸到 RUI 对象，RUI 里应该有血量字段
+```
+
+需要新增驱动命令：`xref <base> <size> <ptr>` —— 在指定内存段里搜某个指针值。
+
+### 126.8 附带收获：m_bleedoutState
+
+`m_bleedoutState = 0x27a8` 独立于 `m_lifeState = 0x698`，
+可以直接判断**敌人是否处于倒地（倒地可救）状态**。
+这是 overlay 上一项目缺的功能（当时只能靠 lifeState 猜）。
+
+### 126.9 待验证
+
+```
+[ ] 重启加载驱动 52736 字节（2026-11-27 16:27:51）
+[ ] verify.ps1 第 1.5 步：假人 m_iHealth 是否 100
+[ ] 对局中打敌人后 m_damageComboStartHealth 是否非零
+[ ] m_bleedoutState 是否随倒地变化
+[ ] 若都不行 → 实现 xref 找 reconScanRUIs
+```

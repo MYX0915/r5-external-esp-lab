@@ -633,6 +633,7 @@ static VOID GlowParity(PEPROCESS proc);
 static VOID GlowColorRow(PEPROCESS proc, U64 globalVa, ULONG row, float r, float g, float b);
 static BOOLEAN PrefixIs(const UCHAR* p, const UCHAR* end, const char* tag);
 static float FabsF(float v);
+static VOID HpTest(PEPROCESS proc, U64 ent);
 static VOID GlowFields(PEPROCESS proc, U64 ent);
 static VOID BoneScan(PEPROCESS proc, U64 ent);
 static VOID BoneDump(PEPROCESS proc, U64 base, ULONG stride, ULONG idx);
@@ -1038,6 +1039,19 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                             } else K("[mdump] bonedump: usage bonedump 0x<addr> [stride] [idx]\n");
                         }
 
+
+                        else if (PrefixIs(p, le, "hptest")) {
+                            const UCHAR* qh = p + 6;
+                            U64 ev = 0; BOOLEAN got = FALSE;
+                            while (qh < le && *qh == ' ') qh++;
+                            if (qh + 1 < le && qh[0] == '0' && (qh[1] == 'x' || qh[1] == 'X')) qh += 2;
+                            while (qh < le) { UCHAR c = *qh; U64 d;
+                                if (c >= '0' && c <= '9') d = c - '0';
+                                else if ((c|0x20) >= 'a' && (c|0x20) <= 'f') d = (c|0x20) - 'a' + 10;
+                                else break; ev = ev * 16 + d; qh++; got = TRUE; }
+                            if (got) HpTest(proc, ev);
+                            else K("[mdump] hptest: usage hptest 0x<entity>\n");
+                        }
                         else if (PrefixIs(p, le, "glowfields")) {
                             const UCHAR* qg = p + 10;
                             U64 ev = 0; BOOLEAN got = FALSE;
@@ -2076,6 +2090,61 @@ static VOID GlowFields(PEPROCESS proc, U64 ent)
     WriteFileAt(L"\\??\\C:\\ProgramData\\sc_glowfields.txt", txt, (ULONG)(w - txt) + 1);
     K("[mdump] glowfields written\n");
     ExFreePoolWithTag(txt, 'gfld');
+}
+
+
+/* hptest <ent>?? DT_Player ???? dump ????/????
+ * ??????????????????????? */
+static VOID HpTest(PEPROCESS proc, U64 ent)
+{
+    CHAR* txt;
+    CHAR* w;
+    struct { const char* name; ULONG off; int kind; } f[] = {
+        { "m_iHealth",                  0x330,  1 },
+        { "m_iMaxHealth",               0x470,  1 },
+        { "m_shieldHealth",             0x18C,  1 },
+        { "m_shieldHealthMax",          0x190,  1 },
+        { "m_iTeamNum",                 0x340,  1 },
+        { "m_lifeState",                0x698,  2 },
+        { "m_bleedoutState",            0x27A8, 2 },
+        { "m_bleedoutStartTime",        0x27AC, 3 },
+        { "m_damageComboLatestUpdateTime", 0x2964, 3 },
+        { "m_damageComboStartHealth",   0x2968, 1 },
+        { "m_shadowShieldActive",       0x3030, 2 },
+        { "m_tempShieldHealth",         0x3034, 1 },
+        { "m_extraShieldHealth",        0x3038, 1 },
+        { "m_extraShieldTier",          0x303C, 1 }
+    };
+    ULONG i, n = sizeof(f) / sizeof(f[0]);
+
+    txt = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x4000, 'hptt');
+    if (!txt) return;
+    RtlZeroMemory(txt, 0x4000); w = txt; w[0] = 0;
+    w = AppendFmt(w, txt + 0x4000, "hptest ent=0x%llX\n", ent);
+    for (i = 0; i < n; i++) {
+        if (f[i].kind == 1) {
+            ULONG v = 0;
+            if (NT_SUCCESS(MemRead(proc, ent + f[i].off, &v, 4)))
+                w = AppendFmt(w, txt + 0x4000, "  +0x%04X %-32s %u\n", f[i].off, f[i].name, v);
+            else
+                w = AppendFmt(w, txt + 0x4000, "  +0x%04X %-32s <read fail>\n", f[i].off, f[i].name);
+        } else if (f[i].kind == 2) {
+            UCHAR v = 0;
+            if (NT_SUCCESS(MemRead(proc, ent + f[i].off, &v, 1)))
+                w = AppendFmt(w, txt + 0x4000, "  +0x%04X %-32s %u\n", f[i].off, f[i].name, (unsigned)v);
+            else
+                w = AppendFmt(w, txt + 0x4000, "  +0x%04X %-32s <read fail>\n", f[i].off, f[i].name);
+        } else {
+            float v = 0;
+            if (NT_SUCCESS(MemRead(proc, ent + f[i].off, &v, 4)))
+                w = AppendFmt(w, txt + 0x4000, "  +0x%04X %-32s %.3f\n", f[i].off, f[i].name, v);
+            else
+                w = AppendFmt(w, txt + 0x4000, "  +0x%04X %-32s <read fail>\n", f[i].off, f[i].name);
+        }
+    }
+    WriteFileAt(L"\\??\\C:\\ProgramData\\sc_hp.txt", txt, (ULONG)(w - txt) + 1);
+    KF("[mdump] hptest done ent=0x%llX\n", ent);
+    ExFreePoolWithTag(txt, 'hptt');
 }
 
 static VOID AutoGlowAll(PEPROCESS proc)

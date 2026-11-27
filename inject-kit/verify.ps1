@@ -72,6 +72,19 @@ if (Test-Path C:\ProgramData\sc_bonescan.txt) {
 Li ""
 Li "判据：命中后看 h=（head.z - origin.z）是否在 60~80（人体比例）"
 
+# ---------------------------------------------------------------- 血量字段
+H1 "1.5 血量字段（hptest）"
+Li "DT_Player: m_iHealth 0x330 / m_bleedoutState 0x27A8 / m_damageComboStartHealth 0x2968"
+Li "           m_tempShieldHealth 0x3034 / m_extraShieldHealth 0x3038"
+Send-Req ("hptest {0}`r`n" -f $target) | Out-Null
+Start-Sleep -Seconds 2
+if (Test-Path C:\ProgramData\sc_hp.txt) {
+    Get-Content C:\ProgramData\sc_hp.txt | ForEach-Object { Li $_ }
+} else { Li "✗ 无输出" }
+Li ""
+Li "判据：训练场假人 m_iHealth 应该是 100"
+Li "      对局中打敌人后 m_damageComboStartHealth 是否变成非零 ← 关键"
+
 # ---------------------------------------------------------------- 高亮
 if (-not $SkipHighlight) {
     H1 "2. 高亮：队伍字段 / 行原生值 / 空闲行"
@@ -150,6 +163,12 @@ H1 "4. 人工判定（缺一不可）"
   □ bonescan 是否命中（hits > 0）
   □ 命中的 h= 是否在 60~80 单位
   □ 若 stride 0x30/0x40 都不命中 → 试 0x20 / 0x48 / 0x60
+
+  【血量】
+  □ 假人 m_iHealth 是否 = 100（基准正确性）
+  □ 对局中打敌人后 m_damageComboStartHealth 是否非零
+  □ m_bleedoutState 是否随倒地变化（0=正常）
+  □ m_tempShieldHealth / m_extraShieldHealth 是否反映临时护盾
 
   【高亮】
   □ 0x1D4 / 0x1E4 是否非零（非零 ⇒ 队伍过滤是卡点）
