@@ -1,0 +1,105 @@
+" )
+
+	string eventText = compiledPlayerNames + CLUB_EVENT_DELIMITER + playlistName
+
+	ClubPublishEvent( CLUB_EVENT_PROGRESS, placement, eventText )
+}
+#endif
+
+#if UI
+int function SortClubMembersByPerformance( ClubSquadSummaryPlayerData a, ClubSquadSummaryPlayerData b )
+{
+	if ( a.kills > b.kills )
+		return -1
+	if ( a.kills < b.kills )
+		return 1
+	if ( a.damageDealt > b.damageDealt )
+		return -1
+	if ( a.damageDealt < b.damageDealt )
+		return 1
+
+	return 0
+}
+#endif
+
+#if UI
+string function CompilePlacementNamesIntoOneString( array<string> playerIDs )
+{
+	                                                                                                        
+	                                    
+	if ( playerIDs.len() > 1 )
+	{
+		for ( int i = 0; i < playerIDs.len(); i++ )
+		{
+			if ( i >= playerIDs.len() )
+				break
+
+			for( int y = 0; y < playerIDs.len(); y++ )
+			{
+				if ( i != y && playerIDs[i] == playerIDs[y] )
+					playerIDs.fastremove( y )
+			}
+		}
+	}
+
+	array<string> uncompiledNames
+	foreach( playerID in playerIDs )
+	{
+		string memberName = Clubs_GetClubMemberNameFromNucleus( playerID )
+
+		if ( memberName != "" )
+			uncompiledNames.append( Clubs_GetClubMemberNameFromNucleus( playerID ) )
+	}
+	                                                                                                      
+
+	string compiledNames
+	for ( int i = 0; i < uncompiledNames.len(); i++ )
+	{
+		string delimiter
+		int namesLeft = (uncompiledNames.len() - 1) - i
+		if ( namesLeft > 1 )
+			delimiter = Localize( "#CLUB_EVENT_PROGRESS_NAME_BREAK" )
+		if ( namesLeft == 1 )
+			delimiter = Localize( "#CLUB_EVENT_PROGRESS_NAME_LAST" )
+
+		compiledNames = compiledNames + uncompiledNames[i] + delimiter
+		                                                                                                                                         
+	}
+
+	                                                                                                    
+	return compiledNames
+}
+#endif
+
+#if (UI && DEV)
+void function DEV_ReportFakePlacementEvent( int forceSquadSize = -1, bool testDupes = false )
+{
+	if ( !ClubIsValid() )
+		return
+
+	array<ClubMember> clubMembers = ClubGetMembers()
+	int squadSize = minint( clubMembers.len(), RandomIntRange( 1, 3 ) )
+	if ( forceSquadSize > 0 )
+		squadSize = minint( clubMembers.len(), forceSquadSize )
+
+	clubMembers.randomize()
+	clubMembers.resize( squadSize )
+
+	if ( testDupes )
+	{
+		for ( int i = 0; i < squadSize * 2; i++ )
+		{
+			                                                                                                                                                     
+			clubMembers.append( clubMembers[i] )
+		}
+		clubMembers.randomize()
+	}
+
+	array<string> playerIDs
+	foreach ( ClubMember member in clubMembers )
+	{
+		playerIDs.append( member.memberID )
+	}
+	string squadNames = CompilePlacementNamesIntoOneString( playerIDs )
+
+	squadNames = replace( squadNames, "%", "

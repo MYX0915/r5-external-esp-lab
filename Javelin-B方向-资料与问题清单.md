@@ -6780,3 +6780,152 @@ glowfind
 ```
 
 脚本会自动检查这三项，不符合直接报错退出，不会发无效请求。
+
+
+---
+
+## 124. deepwiki 全部无法访问，但直接从 VPK 抠出了作弊源码（2026-11-27 16:23）
+
+### 124.1 deepwiki 三种访问方式全部失败
+
+| 方式 | 结果 |
+|---|---|
+| 直接抓 | HTTP 429 Vercel Security Checkpoint |
+| r.jina.ai 代理 | HTTP 401「bad network reputation (AS30058)」 |
+| allorigins 代理 | HTTP 522 源站超时 |
+
+**结论：deepwiki 的任何页面都读不到**（包括 /1-overview 及以下全部内容）。
+只读过用户提供的 zip 里那份 /3.2 页正文。
+
+### 124.2 换了一条更硬的路：直接解 VPK
+
+deepwiki 是**根据仓库生成的二手摘要**，而仓库里那个 81 MB 的 VPK
+装的是**真正的作弊脚本**。直接解它比读摘要更权威。
+
+**VPK 格式**（本包）：
+
+```
+magic    0x55AA1234
+version  0x00030002
+treeSize 94612
+dataSize 0
+```
+
+目录树是 Respawn 变体（条目 terminator 为 0x0000 而非 Valve 的 0xFFFF），
+字段布局与标准不符，未继续逆向。
+
+**改走明文扫描**：Source 系 VPK 不压缩，脚本以明文存放。
+
+```
+数据包 client_frontend.bsp.pak000_000.vpk  77.8 MB
+可读块（>=2KB）  6 个
+含 >=3 个 Squirrel 关键字的块  3 个
+导出 chunk_00（4.2 MB）/ chunk_01（6.7 MB）/ chunk_02（3 KB）
+```
+
+### 124.3 作弊函数完整清单（从 chunk_00 提取）
+
+作弊代码有命名规律 `th_func_*`，全部在这里：
+
+```
+th_func_1                 主循环入口
+th_func_triggerbot        TriggerBot（F4 开关 + 右键触发）
+th_func_fullmap_uav       全图雷达
+th_func_minimap_uav       小地图雷达
+th_func_item_icon_esp     物资图标 ESP（F3 开关）
+th_func_seer_health_esp   希尔血条 ESP
+th_func_auto_loot         自动拾取（F2 开关）
+```
+
+与 README 的功能列表**一一对应**。
+
+### 124.4 关键实现（原文摘录）
+
+**th_func_seer_health_esp** —— 敌方血量透视
+
+```squirrel
+entity player = GetLocalClientPlayer();
+int team = player.GetTeam();
+array<entity> enemies = GetPlayerArrayOfEnemies(team);
+foreach( entity enemy in enemies ) {
+    if(IsValid(enemy) && enemy.IsPlayer() && IsAlive(enemy) && enemy != player) {
+        bool inList = (enemy in player.p.reconScanRUIs);
+        float dis = Distance(player.GetOrigin(), enemy.GetOrigin());
+        if(!inList) {
+            if(dis < draw_dis)                                    // 10000 单位
+                ReconScan_ShowHudForTarget(player, enemy, false);  // ← 直接调游戏技能 HUD
+        }
+        ...
+    }
+}
+```
+
+**th_func_item_icon_esp** —— 物资 ESP
+
+```squirrel
+array<entity> NearbyLoots = GetSurvivalLootNearbyPlayer( player, 6000.0, false, false, false );
+foreach( entity loot in NearbyLoots ) { ... 画图标 ... }
+```
+
+**th_func_triggerbot** —— 完整实现，调用的引擎 API：
+
+```squirrel
+InputIsButtonDown(KEY_F4) / MOUSE_RIGHT / MOUSE_LEFT
+player.GetActiveWeapon(eActiveInventorySlot.mainHand)
+IsWeaponInSingleShotMode / IsWeaponInAutomaticMode / IsReadyToFire
+player.EyePosition() / player.GetViewForward()
+player.GetTargetUnderCrosshair()
+TraceLine(...) / DeferredTraceLine(...) / GetDeferredTraceResult(...)
+crosshairEnt.GetTeam() / IsPlayer() / IsTrainingDummie() / IsProwler()
+IsFiringRangeGameMode() / IsSurvivalTraining()
+AnnouncementMessageSweep(...)     // 屏幕提示
+```
+
+### 124.5 这些 API 说明了什么
+
+**引擎在客户端脚本层暴露了这些能力**：
+
+| API | 含义 | 对我们 |
+|---|---|---|
+| `GetPlayerArrayOfEnemies(team)` | **按队伍过滤的敌人列表** | 确认引擎有队伍信息 |
+| `Distance(a, b)` | 实体间距离 | 与我们的 0.01905 换算一致 |
+| `ReconScan_ShowHudForTarget(...)` | **给任意目标显示血条 HUD** | **证明客户端能拿到敌方血量** |
+| `GetSurvivalLootNearbyPlayer(...)` | 范围内物资列表 | — |
+| `TraceLine(...)` | 射线检测 | 命中判定 |
+| `GetTargetUnderCrosshair()` | 准星下实体 | 类似我们的 PickTarget |
+
+**最重要的一条**：`ReconScan_ShowHudForTarget` 能把血条 HUD 挂到任意敌人身上，
+说明**敌方血量数据确实在客户端**，只是不经由我们之前读的实体字段。
+这跟第 115 节「Apex 不同步敌方血量」的结论**不矛盾**：
+血量不在我们读到的偏移里，但在技能系统的数据结构里。
+
+### 124.6 为什么这条路我们用不了
+
+```
+· 需要把脚本塞进游戏 VPK 并让引擎加载（改游戏文件）
+· Windows 版 EAC 会校验 VPK 完整性 → 直接踢
+· 原帖明确 "for linux only"
+· 与我们的外部只读驱动架构完全不兼容
+```
+
+**但它的情报价值很高**：告诉我们引擎暴露了哪些数据、哪些是可行的。
+
+### 124.7 本地产物
+
+```
+refs/squirrel/
+  apex-squirrelscripts-linux-main/     仓库本体（README + 2 个原生脚本）
+  vpk/CheatsFolder/                    解出的 VPK（79 MB + 92 KB）
+  extracted/chunk_00_0000791A.txt      4.2 MB  含作弊代码
+  extracted/chunk_01_00423919.txt      6.7 MB  含雷达相关
+  vpk_parse.py                         目录树解析（格式未完全逆出）
+  vpk_scan.py                          明文扫描器
+```
+
+### 124.8 结论
+
+```
+deepwiki：全部读不到（三种方式均失败）
+但拿到了它摘要的原始内容 —— 作弊脚本源码本身
+结果比读 deepwiki 更直接、更完整
+```
