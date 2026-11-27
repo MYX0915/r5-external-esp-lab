@@ -393,6 +393,10 @@ static ULONG CollectRegions(PEPROCESS proc, REG* out, ULONG max, U64 minSz, U64 
 #define RVA_VT_NPC_DUMMIE 0x30E9330ULL   /* ?????? */
 #define RVA_VT_PLAYER     0x316930ULL    /* ??????????? +0x978? */
 static U64 modBaseForNpc = 0;
+/* 本地玩家句柄槽 RVA：驱动原先写死 0x3D3DCD0（早期实测）
+ * offsets 表给的是 localplayerHandle = 0x3d3a8d0
+ * 用 locdump 对比后可用 locsel 切换 */
+static U64 g_localHandleRva = 0x3D3DCD0ULL;
 static U64 g_vtExtra  = 0;  /* ??? 1??????? (RVA 0x30E9330) */
 static U64 g_vtExtra2 = 0;  /* ??? 2???????? (RVA 0x316930) */
 static ULONG g_vtManual = 0; /* vt2 ??????????? */
@@ -633,6 +637,7 @@ static VOID GlowParity(PEPROCESS proc);
 static VOID GlowColorRow(PEPROCESS proc, U64 globalVa, ULONG row, float r, float g, float b);
 static BOOLEAN PrefixIs(const UCHAR* p, const UCHAR* end, const char* tag);
 static float FabsF(float v);
+static VOID LocDump(PEPROCESS proc, U64 modBase);
 static VOID HpTest(PEPROCESS proc, U64 ent);
 static VOID XrefScan(PEPROCESS proc, U64 base, ULONG size, U64 value);
 static VOID FindDict(PEPROCESS proc, U64 base, ULONG size, U64* vals, ULONG nvals);
@@ -1043,6 +1048,24 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
 
 
 
+
+                        else if (PrefixIs(p, le, "locdump")) {
+                            LocDump(proc, modBaseForNpc);
+                        }
+                        else if (PrefixIs(p, le, "locsel")) {
+                            const UCHAR* ql = p + 6;
+                            U64 v = 0; BOOLEAN got = FALSE;
+                            while (ql < le && *ql == ' ') ql++;
+                            if (ql + 1 < le && ql[0] == '0' && (ql[1] == 'x' || ql[1] == 'X')) ql += 2;
+                            while (ql < le) { UCHAR c = *ql; U64 d;
+                                if (c >= '0' && c <= '9') d = c - '0';
+                                else if ((c|0x20) >= 'a' && (c|0x20) <= 'f') d = (c|0x20) - 'a' + 10;
+                                else break; v = v * 16 + d; ql++; got = TRUE; }
+                            if (got && v < 0x2000000) {
+                                g_localHandleRva = v;
+                                KF("[mdump] localHandleRva=0x%llX\n", g_localHandleRva);
+                            } else K("[mdump] locsel: usage locsel 0x<rva>\n");
+                        }
                         else if (PrefixIs(p, le, "xref")) {
                             const UCHAR* qx = p + 4;
                             U64 bv = 0, vv = 0; ULONG sz = 0x10000;
@@ -2296,6 +2319,61 @@ done:
     ExFreePool(txt);
 }
 
+
+/* 同时验证多个候选的本地玩家句柄偏移 */
+static VOID LocDump(PEPROCESS proc, U64 modBase)
+{
+    CHAR* txt;
+    CHAR* w;
+    struct { const char* name; U64 rva; int isHandle; } c[] = {
+        { "driver 0x3D3DCD0",        0x3D3DCD0ULL, 1 },
+        { "table  localplayerHandle", 0x3D3A8D0ULL, 1 },
+        { "table  LocalPlayer(ptr)",  0x3EAC668ULL, 0 },
+    };
+    ULONG i, n = sizeof(c) / sizeof(c[0]);
+
+    txt = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x4000, 'locd');
+    if (!txt) return;
+    RtlZeroMemory(txt, 0x4000); w = txt; w[0] = 0;
+    w = AppendFmt(w, txt + 0x4000, "locdump module=0x%llX\n", modBase);
+
+    for (i = 0; i < n; i++) {
+        if (c[i].isHandle) {
+            ULONG h = 0;
+            if (!NT_SUCCESS(MemRead(proc, modBase + c[i].rva, &h, 4))) {
+                w = AppendFmt(w, txt + 0x4000, "  %-26s rva=0x%llX  <read fail>\n", c[i].name, c[i].rva);
+                continue;
+            }
+            {
+                ULONG idx = h & 0xFFFF, ser = h >> 16;
+                U64 entry = modBase + RVA_ENTITY_ARRAY + (U64)idx * ENT_STRIDE;
+                U64 inst = 0; ULONG eser = 0;
+                BOOLEAN ok = FALSE;
+                if (NT_SUCCESS(MemRead(proc, entry, &inst, 8)) &&
+                    NT_SUCCESS(MemRead(proc, entry + 8, &eser, 4)) && inst && eser == ser) ok = TRUE;
+                w = AppendFmt(w, txt + 0x4000,
+                    "  %-26s rva=0x%llX  h=0x%08X idx=%lu ser=%lu  ent=0x%llX ser_match=%d\n",
+                    c[i].name, c[i].rva, h, idx, ser, inst, ok ? 1 : 0);
+                if (ok) {
+                    float cam[3];
+                    if (NT_SUCCESS(MemRead(proc, inst + OFF_CAMERA, cam, 12)))
+                        w = AppendFmt(w, txt + 0x4000, "        cam=(%.1f,%.1f,%.1f) [x10]\n",
+                                      cam[0], cam[1], cam[2]);
+                }
+            }
+        } else {
+            U64 p = 0;
+            if (NT_SUCCESS(MemRead(proc, modBase + c[i].rva, &p, 8)))
+                w = AppendFmt(w, txt + 0x4000, "  %-26s rva=0x%llX  ptr=0x%llX\n", c[i].name, c[i].rva, p);
+            else
+                w = AppendFmt(w, txt + 0x4000, "  %-26s rva=0x%llX  <read fail>\n", c[i].name, c[i].rva);
+        }
+    }
+    WriteFileAt(L"\\??\\C:\\ProgramData\\sc_loc.txt", txt, (ULONG)(w - txt) + 1);
+    K("[mdump] locdump written\n");
+    ExFreePoolWithTag(txt, 'locd');
+}
+
 static VOID AutoGlowAll(PEPROCESS proc)
 {
     UCHAR row = (UCHAR)(g_autoRow & 0xFF);
@@ -2386,7 +2464,7 @@ static VOID EspLoop(PEPROCESS proc0, U64 modBase0)
         f.Magic = 0x44454546;     /* 'FEED' */
         f.Version = 2;
 
-        if (NT_SUCCESS(MemRead(proc, modBase + RVA_LOCAL_HANDLE, &h, 4)) && h != 0xFFFFFFFF) {
+        if (NT_SUCCESS(MemRead(proc, modBase + g_localHandleRva, &h, 4)) && h != 0xFFFFFFFF) {
             ULONG idx = h & 0xFFFF;
             ULONG ser = h >> 16;
             U64 entry = modBase + RVA_ENTITY_ARRAY + (U64)idx * ENT_STRIDE;

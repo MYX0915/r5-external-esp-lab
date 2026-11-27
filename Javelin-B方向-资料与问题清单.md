@@ -7366,3 +7366,98 @@ DT / RecvTable 结构体正确  =  必要条件
 [ ] 若不行，finddict 能否定位 reconScanRUIs
 [ ] bleedoutState 是否可用于倒地标记
 ```
+
+
+---
+
+## 128. 最新偏移表逐项核对（2026-11-27 16:40）
+
+### 128.1 核对结果总表
+
+拿 `refs/apex-offsets-latest.txt` 的 `[Mics]` 全局段，逐项对比驱动里的常量：
+
+| 驱动常量 | 驱动值 | 偏移表 | 结论 |
+|---|---|---|---|
+| `RVA_ENTITY_ARRAY` | `0x6B515D8` | `EntityList = 0x6b515d8` | ✅ **一致** |
+| `OFF_CAMERA` | `0x1F78` | `camera_origin = 0x1f78` | ✅ **一致** |
+| `RVA_HIGHLIGHT_GLOBAL` | `0x72BE6C0` | `highlightSetting = 0x72be6c0` | ✅ **一致** |
+| 文档 `m_viewangle` | `0x25C8` | `m_viewangle = 0x25c8` | ✅ **一致** |
+| `RVA_LOCAL_HANDLE` | `0x3D3DCD0` | `localplayerHandle = 0x3d3a8d0` | ❌ **不一致，差 0x3400** |
+| — | 未使用 | `LocalPlayer = 0x3eac668` | ⚠️ **未尝试的候选** |
+| `OFF_ORIGIN`（本地） | `0x376C` | 表里无此项 | ⚠️ 实测值，表未收录 |
+| 实体坐标 | `0x978` / `0x7830` | `m_vecAbsOrigin = 0x170` | ⚠️ **表给的是 0x170，我们没用** |
+
+### 128.2 三处需要处理的差异
+
+**① 本地玩家句柄：`0x3D3DCD0` vs `0x3d3a8d0`**
+
+```
+驱动用的是早期实测值 0x3D3DCD0（文档多处记录为"已验证"）
+偏移表给的是 0x3d3a8d0
+差值 0x3400，不是小的对齐偏差，是两处不同的结构
+```
+
+两者都可能有效（一个是句柄槽，另一个可能是别的结构里也存了句柄），
+必须实测才知道哪个对当前 build 正确。
+
+**② `LocalPlayer = 0x3eac668` 从未尝试**
+
+如果它是「指向本地玩家实体的指针」，那比走句柄→实体数组更直接，
+可以省掉 serial 校验。值得一试。
+
+**③ 实体坐标：表给 `m_vecAbsOrigin = 0x170`，我们没用过**
+
+我们用的是 `0x978`（表里是 `m_animRelativeData`）、
+`0x7830`（表里无此项）、`0x376C`（表里无此项）。
+
+**`m_vecAbsOrigin` 是标准的世界坐标字段名**，0x170 才是"正统"位置。
+之前测 0x170 得到垃圾值，可能测的是错误的实体（PVS 未加载的那些）。
+
+### 128.3 新增诊断命令
+
+**`locdump`** —— 同时验证三个候选
+
+```
+driver 0x3D3DCD0          rva=0x3D3DCD0   h=0x0003000E idx=14 ser=3  ent=0x... ser_match=1
+table  localplayerHandle  rva=0x3D3A8D0   h=...        ...
+table  LocalPlayer(ptr)   rva=0x3EAC668   ptr=0x...
+```
+
+输出到 `sc_loc.txt`，带出相机坐标做交叉验证（相机有值说明实体确实解析对了）。
+
+**`locsel 0x<rva>`** —— 运行时切换本地句柄偏移，不用重编译。
+
+### 128.4 待办：实体坐标顺序也要可切换
+
+当前 `ReadEntPos` 是硬编码 0x978 → 0x7830 → 0x376C 三级回退。
+如果表里的 `m_vecAbsOrigin = 0x170` 才是对的，需要把它加进候选。
+
+**下一步**：加 `possel <index>` 切换坐标读取顺序，把 0x170 也纳入。
+
+### 128.5 核对的意义
+
+```
+✅ 三个核心 RVA（实体数组 / 相机 / 高亮表）完全一致
+   ⇒ 偏移表与我们的 build 是同一版本，可信
+❌ 本地句柄槽不一致
+   ⇒ 要么表用别名，要么我们的值来自旧版
+⚠️ m_vecAbsOrigin 0x170 未验证
+   ⇒ 如果 0x170 能用，对局里的坐标问题可能一次性解决
+```
+
+### 128.6 验证顺序（重启后）
+
+```
+1. locdump            看三个候选哪个能解析出有效实体
+2. 若表里的 0x3d3a8d0 有效 → locsel 0x3d3a8d0 切过去
+3. 若 LocalPlayer 是直指针 → 记录下来，可作为备用路径
+4. hptest             验证血量字段
+5. 坐标：手工 p 读一次 0x170，看是不是合理坐标
+```
+
+### 128.7 当前驱动状态
+
+```
+mdump.sys  57856 字节  2026-11-27 16:39:48（需重启）
+新增命令    locdump / locsel
+```
