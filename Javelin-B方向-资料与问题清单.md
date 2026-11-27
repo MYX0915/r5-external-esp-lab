@@ -6222,3 +6222,108 @@ MemWrite(+0x30, 2);             /* HIGHLIGHT_VIS_ALWAYS —— 穿墙 */
 第 103 节记录的"postProcess=1 的样式行才渲染剪影（row50 可用 / row2 无效）"仍然成立，
 但当时只发现了 `functionBits` 的两个 bit，**没有发现 +0x2C 的 Flags 和 +0x30 的 DrawFunc**。
 本节是那一节的补充，不是推翻。
+
+
+---
+
+## 119. 骨骼索引表首次可用（2026-11-27 15:10）
+
+### 119.1 之前的状态
+
+驱动里有 `bones` 命令，但文档第 108/109 节记录：**stride 0x30/0x40 扫实体前 32KB，0 命中**。
+即骨骼矩阵数组从来没找到过。
+
+原因是盲扫：不知道数组在哪、有几根骨骼、矩阵里平移分量在哪，全靠猜。
+
+### 119.2 资料包给了完整的骨骼索引表
+
+`refs/deepwiki-esp/原始附件/05-Apex骨骼与命中盒Wiki.txt`（236 行，UC Wiki 2019-03）
+含模型 `mdl/humans\class\light\pilot_light_support.rmdl` 的导出：
+
+```
+24 个命中盒（Hitbox -> Group -> Rootbone）
+176 根骨骼（Bone[n] -> 名称）
+```
+
+**关键索引**
+
+| 索引 | 名称 | 说明 |
+|---|---|---|
+| `Bone[0]` | `jx_c_delta` | delta 根（通常贴合实体原点） |
+| `Bone[4]` | `def_c_hip` | 骨盆 |
+| `Bone[5]` | `def_c_spineA` | 腰椎 |
+| `Bone[6]` | `def_c_spineB` | 背中 |
+| `Bone[7]` | `def_c_spineC` | 上胸 |
+| `Bone[9]` | `def_c_neckA` | 颈下 |
+| `Bone[11]` | `def_c_neckB` | 颈上 |
+| **`Bone[12]`** | **`def_c_head`** | **头部** |
+| `Bone[14]` / `Bone[39]` | `def_l/r_shoulder` | 左右肩 |
+| `Bone[20]` / `Bone[43]` | `def_l/r_elbow` | 左右肘 |
+| `Bone[18]` / `Bone[45]` | `def_l/r_wrist` | 左右腕 |
+| `Bone[63]`~`Bone[67]` | 腿部 | — |
+| `Bone[68]`~`Bone[72]` | 脚 | — |
+
+**命中盒分组**
+
+```
+Group 1 → head       (hitbox 0  → rootbone 11 = neckB)
+Group 2 → 上胸        (hitbox 1,2 → rootbone 9,7)
+Group 3 → 下身        (hitbox 3,4,5 → rootbone 6,5,4)
+Group 4 → 手臂        (hitbox 6,7,8,23 → rootbone 14,18,20,14)
+Group 5 → 手/前臂     (hitbox 9,10,11,22 → rootbone 39,43,45,39)
+Group 6 → 腿          (hitbox 12,13,14,15,20 → rootbone 63,65,66,67,63)
+Group 7 → 脚          (hitbox 16,17,18,19,21 → rootbone 68,70,71,72,68)
+```
+
+### 119.3 用它做签名搜索（新增 bonescan）
+
+有了索引表，就不用盲扫了。**骨骼链有严格几何关系**：
+
+```
+hip(4) → spineC(7) → neckB(11) → head(12)
+这四根在一条垂直链上：x/y 相差很小，z 单调递增，
+hip→head 高度差 20~120 单位（人体比例）
+```
+
+`bonescan <entity>` 的算法：
+
+```
+1. 遍历实体 0x10 ~ 0x2000 每个 8 字节字段（可能是骨骼数组指针）
+2. 对每个指针，分别按 stride 0x30 和 0x40 尝试
+3. 读 bone[0][4][7][11][12] 的平移分量（矩阵内 +0x0C 起的 3 个 float）
+4. 校验上面的垂直链几何关系
+5. 命中就输出：字段偏移 / 数组地址 / stride / 原点 / 头部坐标 / 身高
+```
+
+### 119.4 新增命令
+
+| 命令 | 作用 |
+|---|---|
+| `bonescan 0x<entity>` | 定向搜索骨骼数组，输出 `sc_bonescan.txt` |
+| `bonedump 0x<addr> [stride] [idx]` | 按索引表读指定骨骼位置，验证用 |
+
+### 119.5 为什么这份 2019 年的表还能用
+
+`def_c_hip` / `def_c_spineA` / `def_c_head` 这套命名是 **Titanfall 血统的标准人形骨架**，
+Apex 沿用至今。索引顺序由模型文件定义，模型资源没重做过就不会变。
+
+**但必须验证**：`bonescan` 命中后，看输出的身高是否在 60~80 单位（人体比例），
+如果明显不对，说明索引和当前模型不匹配，需要重新导出。
+
+### 119.6 找到骨骼数组之后能做什么
+
+```
+1. 头部精确点（瞄准点，比现在的"框高度/2"准）
+2. 骨架线 ESP（肩→肘→手、髋→膝→脚）—— 比包围框定位更准
+3. 判断姿态（蹲/趴/站）—— 用 head.z 与 hip.z 的高度差
+4. 修正包围框高度（用 head 与 feet 骨骼的真实投影）
+```
+
+### 119.7 待验证
+
+```
+[ ] 重启加载新驱动（46592 字节，2026-11-27 15:10:06）
+[ ] 训练场对假人执行 bonescan，看是否命中
+[ ] 命中后 bonedump 验证身高比例
+[ ] 若 stride 0x30/0x40 都不命中，试 0x20 / 0x48 / 0x60
+```

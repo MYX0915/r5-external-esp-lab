@@ -612,6 +612,10 @@ static VOID GlowTick(PEPROCESS proc);
 static VOID GlowParity(PEPROCESS proc);
 static VOID GlowColorRow(PEPROCESS proc, U64 globalVa, ULONG row, float r, float g, float b);
 static BOOLEAN PrefixIs(const UCHAR* p, const UCHAR* end, const char* tag);
+static float FabsF(float v);
+static VOID BoneScan(PEPROCESS proc, U64 ent);
+static VOID BoneDump(PEPROCESS proc, U64 base, ULONG stride, ULONG idx);
+static BOOLEAN BoneChainSig(PEPROCESS proc, U64 base, ULONG stride, float* headOut, float* originOut);
 static BOOLEAN ParseUOpt(const UCHAR** pp, const UCHAR* end, ULONG* out);
 static BOOLEAN GlowRowAddr(PEPROCESS proc, U64 globalVa, ULONG row, U64* entry);
 static VOID GlowSetupRow(PEPROCESS proc, U64 globalVa, ULONG row,
@@ -983,6 +987,35 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                             } else K("[mdump] arrscan: bad args\n");
                         }
 
+
+                        else if (PrefixIs(p, le, "bonescan")) {
+                            const UCHAR* qb = p + 8;
+                            U64 ev = 0; BOOLEAN got = FALSE;
+                            while (qb < le && *qb == ' ') qb++;
+                            if (qb + 1 < le && qb[0] == '0' && (qb[1] == 'x' || qb[1] == 'X')) qb += 2;
+                            while (qb < le) { UCHAR c = *qb; U64 d;
+                                if (c >= '0' && c <= '9') d = c - '0';
+                                else if ((c|0x20) >= 'a' && (c|0x20) <= 'f') d = (c|0x20) - 'a' + 10;
+                                else break; ev = ev * 16 + d; qb++; got = TRUE; }
+                            if (got) { KF("[mdump] bonescan start ent=0x%llX\n", ev); BoneScan(proc, ev); }
+                            else K("[mdump] bonescan: usage bonescan 0x<entity>\n");
+                        }
+                        else if (PrefixIs(p, le, "bonedump")) {
+                            const UCHAR* qb = p + 8;
+                            U64 bv = 0; ULONG sd = 0x30, ix = 0;
+                            while (qb < le && *qb == ' ') qb++;
+                            if (qb + 1 < le && qb[0] == '0' && (qb[1] == 'x' || qb[1] == 'X')) qb += 2;
+                            while (qb < le) { UCHAR c = *qb; U64 d;
+                                if (c >= '0' && c <= '9') d = c - '0';
+                                else if ((c|0x20) >= 'a' && (c|0x20) <= 'f') d = (c|0x20) - 'a' + 10;
+                                else break; bv = bv * 16 + d; qb++; }
+                            if (bv) {
+                                ULONG t;
+                                if (ParseUOpt(&qb, le, &t)) { sd = t; if (ParseUOpt(&qb, le, &ix)) { } }
+                                if (sd != 0x30 && sd != 0x40) sd = 0x30;
+                                BoneDump(proc, bv, sd, ix);
+                            } else K("[mdump] bonedump: usage bonedump 0x<addr> [stride] [idx]\n");
+                        }
                         else if (PrefixIs(p, le, "glowfind")) {
                             GlowFindFree(proc, modBaseForNpc + RVA_HIGHLIGHT_GLOBAL);
                         }
@@ -1834,6 +1867,112 @@ static VOID GlowCloneRow(PEPROCESS proc, U64 globalVa, ULONG src, ULONG dst)
     if (!NT_SUCCESS(MemRead(proc, tbl + (U64)src * 0x34ULL, buf, 0x34))) { K("[mdump] glowclone: src read fail\n"); return; }
     MemWrite(proc, tbl + (U64)dst * 0x34ULL, buf, 0x34);
     KF("[mdump] glowclone %lu -> %lu (0x34 bytes)\n", src, dst);
+}
+
+
+/* ============ 骨骼矩阵数组搜索（依据 UC Wiki 骨骼索引表）============
+ * 索引: 0=delta 根, 4=hip, 7=spineC, 11=neckB, 12=head, 共 176 根
+ * 每个骨骼是一条 3x4 矩阵，平移分量在矩阵内 +0x0C（float[3], [7], [11]）
+ */
+
+static float FabsF(float v) { return (v < 0.0f) ? -v : v; }
+
+static BOOLEAN ReadBoneTrans(PEPROCESS proc, U64 base, ULONG stride, ULONG idx, float* out)
+{
+    return NT_SUCCESS(MemRead(proc, base + (U64)idx * stride + 0x0C, out, 12));
+}
+
+static BOOLEAN BoneChainSig(PEPROCESS proc, U64 base, ULONG stride, float* headOut, float* originOut)
+{
+    float t0[3], t4[3], t7[3], t11[3], t12[3];
+    float dz1, dz2, dz3, height;
+    if (!ReadBoneTrans(proc, base, stride, 0, t0))  return FALSE;
+    if (!ReadBoneTrans(proc, base, stride, 4, t4))  return FALSE;
+    if (!ReadBoneTrans(proc, base, stride, 7, t7))  return FALSE;
+    if (!ReadBoneTrans(proc, base, stride, 11, t11)) return FALSE;
+    if (!ReadBoneTrans(proc, base, stride, 12, t12)) return FALSE;
+
+    /* 全部有限且在合理地图范围内 */
+    if (!(t0[0] > -40000.0f && t0[0] < 40000.0f)) return FALSE;
+    if (!(t12[2] > -5000.0f && t12[2] < 5000.0f)) return FALSE;
+    if (t0[0] != t0[0] || t12[0] != t12[0]) return FALSE;
+
+    /* 垂直链：x/y 相近 */
+    if (FabsF(t4[0] - t7[0]) > 12.0f) return FALSE;
+    if (FabsF(t4[1] - t7[1]) > 12.0f) return FALSE;
+    if (FabsF(t7[0] - t12[0]) > 25.0f) return FALSE;
+    if (FabsF(t7[1] - t12[1]) > 25.0f) return FALSE;
+
+    /* z 单调递增 */
+    dz1 = t7[2] - t4[2];
+    dz2 = t11[2] - t7[2];
+    dz3 = t12[2] - t11[2];
+    if (dz1 <= 0.0f || dz3 <= 0.0f) return FALSE;
+    height = t12[2] - t4[2];
+    if (height < 20.0f || height > 120.0f) return FALSE;
+
+    if (headOut)   { headOut[0] = t12[0]; headOut[1] = t12[1]; headOut[2] = t12[2]; }
+    if (originOut) { originOut[0] = t0[0]; originOut[1] = t0[1]; originOut[2] = t0[2]; }
+    return TRUE;
+}
+
+static VOID BoneScan(PEPROCESS proc, U64 ent)
+{
+    CHAR* txt = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x8000, 'bsct');
+    CHAR* w;
+    ULONG off, hits = 0;
+    static const ULONG strides[2] = { 0x30, 0x40 };
+
+    if (!txt) return;
+    RtlZeroMemory(txt, 0x8000); w = txt; w[0] = 0;
+    w = AppendFmt(w, txt + 0x8000, "bonescan ent=0x%llX\n", ent);
+
+    for (off = 0x10; off < 0x2000; off += 8) {
+        U64 p = 0;
+        ULONG si;
+        if (!NT_SUCCESS(MemRead(proc, ent + off, &p, 8))) continue;
+        if (!p || p < 0x10000 || (p >> 47)) continue;
+        for (si = 0; si < 2; si++) {
+            float head[3], orig[3];
+            if (BoneChainSig(proc, p, strides[si], head, orig)) {
+                w = AppendFmt(w, txt + 0x8000,
+                    "HIT field+0x%X -> 0x%llX stride=0x%X\n", off, p, strides[si]);
+                w = AppendFmt(w, txt + 0x8000,
+                    "    origin=(%.1f,%.1f,%.1f) head=(%.1f,%.1f,%.1f) h=%.1f\n",
+                    orig[0], orig[1], orig[2], head[0], head[1], head[2], head[2] - orig[2]);
+                hits++;
+                if (hits >= 8) goto done;
+            }
+        }
+    }
+done:
+    w = AppendFmt(w, txt + 0x8000, "hits=%lu\n", hits);
+    WriteFileAt(L"\\??\\C:\\ProgramData\\sc_bonescan.txt", txt, (ULONG)(w - txt) + 1);
+    KF("[mdump] bonescan done hits=%lu\n", hits);
+    ExFreePoolWithTag(txt, 'bsct');
+}
+
+/* 指定数组直接按骨骼索引读位置（验证用） */
+static VOID BoneDump(PEPROCESS proc, U64 base, ULONG stride, ULONG idx)
+{
+    CHAR* txt = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x4000, 'bdmp');
+    CHAR* w;
+    ULONG i;
+    if (!txt) return;
+    RtlZeroMemory(txt, 0x4000); w = txt; w[0] = 0;
+    w = AppendFmt(w, txt + 0x4000, "bonedump base=0x%llX stride=0x%X idx=%lu\n", base, stride, idx);
+    for (i = 0; i < 176; i++) {
+        float t[3];
+        if (!ReadBoneTrans(proc, base, stride, i, t)) { w = AppendFmt(w, txt + 0x4000, "read fail at %lu\n", i); break; }
+        if (i == 0 || i == 4 || i == 7 || i == 11 || i == 12 ||
+            (idx && i == idx)) {
+            w = AppendFmt(w, txt + 0x4000, "  [%3lu] (%.2f, %.2f, %.2f)\n", i, t[0], t[1], t[2]);
+        }
+        if (w > txt + 0x3800) break;
+    }
+    WriteFileAt(L"\\??\\C:\\ProgramData\\sc_bonedump.txt", txt, (ULONG)(w - txt) + 1);
+    K("[mdump] bonedump written\n");
+    ExFreePoolWithTag(txt, 'bdmp');
 }
 
 static VOID AutoGlowAll(PEPROCESS proc)
