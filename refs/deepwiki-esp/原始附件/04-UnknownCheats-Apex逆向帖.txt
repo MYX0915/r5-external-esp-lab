@@ -1,0 +1,1324 @@
+
+UnknownCheats - Leading the game hacking and cheat development scene since 2000	
+UnKnoWnCheaTs Game Hacking Portal	UnKnoWnCheaTs Game Hacking Forum – Cheats, Hacks, and Tutorials	Download Game Hacks, Cheats and Hacking Tools – UnKnoWnCheaTs	Donate to Support UnKnoWnCheaTs Game Hacking Community	User Settings and Preferences – UnKnoWnCheaTs Control Panel	Quick Access to Game Hacking Forums and Tools	Search UnKnoWnCheaTs	Join the UnKnoWnCheaTs Discord and IRC for Game Hacking Chat	Game Hacking Wiki – Tutorials and Guides on UnKnoWnCheaTs	Toggle Dark Mode
+
+Go Back	 	UnKnoWnCheaTs - Multiplayer Game Hacking and Cheats
+First-Person Shooters
+Apex Legends
+Reload this Page [Coding] Apex Reversal, Structs and Offsets
+Advanced Forum Search
+New Posts | New Threads
+New Posts: Last Login
+Mark All Forums Read
+Total Posts: 4
+Threads Started: 1
+Reputation: 10
+Last Login: Yesterday at 11:46 PM
+Private Messages: Unread 0, Total 0 (0% full)
+UnKnoWnCheaTs Community Rules
+
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook	
+Page 62 of 135	« First	<	12	52	58	59	60	61	62	63	64	65	66	72	112	>	Last »	
+View First Unread View First Unread  
+Thread Tools 	Search this Thread 	Rating: Thread Rating: 4 votes, 5.00 average. 
+Old 15th March 2026, 01:07 PM	  #1221
+americgroup
+n00bie
+
+
+americgroup's Avatar
+
+Join Date: Mar 2020
+Posts: 16
+Reputation: 10
+Rep Power: 163
+americgroup has made posts that are generally average in quality
+Points: 4,839, Level: 7
+Points: 4,839, Level: 7	Points: 4,839, Level: 7	Points: 4,839, Level: 7
+Level up: 38%, 561 Points needed
+Level up: 38%	Level up: 38%	Level up: 38%
+Activity: 2.8%
+Activity: 2.8%	Activity: 2.8%	Activity: 2.8%
+Last Achievements
+Apex Reversal, Structs and OffsetsApex Reversal, Structs and Offsets
+How do I perform a dump with the R5Apex DX12? I've tried, but no dumper supports this. How are you guys doing offset dumps?
+americgroup is offline
+Last Active: 13th October 2026
+
+Add to americgroup's Reputation Take from americgroup's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 15th March 2026, 01:16 PM	  #1222
+SpainHachis
+n00bie
+
+
+SpainHachis's Avatar
+
+Join Date: Feb 2026
+Posts: 7
+Reputation: 10
+Rep Power: 20
+SpainHachis has made posts that are generally average in quality
+Points: 112, Level: 1
+Points: 112, Level: 1	Points: 112, Level: 1	Points: 112, Level: 1
+Level up: 28%, 288 Points needed
+Level up: 28%	Level up: 28%	Level up: 28%
+Activity: 7.5%
+Activity: 7.5%	Activity: 7.5%	Activity: 7.5%
+Quote:
+Originally Posted by americgroup View Post
+How do I perform a dump with the R5Apex DX12? I've tried, but no dumper supports this. How are you guys doing offset dumps?
+estoy igual que tu compañero uso los offset y todo de pastebin y no me funciona ni el esp ni nada y el driver va perfecto por que no me detecta ni me mete ban
+e detecta ni me mete ban
+SpainHachis is offline
+Last Active: 29th July 2026
+
+Add to SpainHachis's Reputation Take from SpainHachis's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 15th March 2026, 07:13 PM	  #1223
+killogram
+Banned
+
+killogram's Avatar
+
+Join Date: Jan 2026
+Location: Canada
+Posts: 130
+Reputation: 306
+Rep Power: 22
+killogram has dreams of becoming a modkillogram has dreams of becoming a modkillogram has dreams of becoming a modkillogram has dreams of becoming a mod
+Points: 893, Level: 1
+Points: 893, Level: 1	Points: 893, Level: 1	Points: 893, Level: 1
+Level up: 99%, 7 Points needed
+Level up: 99%	Level up: 99%	Level up: 99%
+Activity: 14.0%
+Activity: 14.0%	Activity: 14.0%	Activity: 14.0%
+if anyone need its updated : https://i.postimg.cc/7Ljb7qPs/Sans-titre.png
+
+Code:
+std::map<uint32_t, c_props> item_map = {
+	{ 1, { "Kraber", item_rarity::HEIRLOOM }},
+	{ 2, { "Mastiff", item_rarity::COMMON }},
+	{ 6, { "Mastiff Gold", item_rarity::LEGENDARY }},
+	{ 8, { "LStar", item_rarity::COMMON }},
+	{ 14, { "Havoc", item_rarity::COMMON }},
+	{ 20, { "Devotion", item_rarity::COMMON }},
+	{ 26, { "Triple Take", item_rarity::COMMON }},
+	{ 32, { "Flatline", item_rarity::COMMON }},
+	{ 37, { "Hemlock", item_rarity::COMMON }},
+	{ 44, { "G7 Scout", item_rarity::HEIRLOOM }},
+	{ 49, { "Alternator", item_rarity::COMMON }},
+	{ 55, { "R99", item_rarity::COMMON }},
+	{ 61, { "Prowler", item_rarity::COMMON }},
+	{ 57, { "Volt", item_rarity::LEGENDARY }},
+	{ 72, { "Longbow", item_rarity::COMMON }},
+	{ 77, { "Charge Rifle", item_rarity::COMMON }},
+	{ 67, { "Volt", item_rarity::COMMON }},
+	{ 82, { "Spitfire", item_rarity::COMMON }},
+	{ 87, { "R301", item_rarity::COMMON }},
+	{ 92, { "Eva-8", item_rarity::COMMON }},
+	{ 98, { "Peacekeeper", item_rarity::COMMON }},
+	{ 104, { "Mozambique", item_rarity::COMMON }},
+	{ 117, { "Wingman", item_rarity::COMMON }},
+	{ 123, { "P2020", item_rarity::COMMON }},
+	{ 136, { "RE45", item_rarity::COMMON }},
+	{ 145, { "Sentinel", item_rarity::COMMON }},
+	{ 152, { "Bocek", item_rarity::COMMON }},
+	{ 159, { "Repeater", item_rarity::COMMON }},
+	{ 169, { "Light Ammo", item_rarity::COMMON }},
+	{ 170, { "Energy Ammo", item_rarity::COMMON }},
+	{ 171, { "Shotgun Ammo", item_rarity::COMMON }},
+	{ 172, { "Heavy Ammo", item_rarity::COMMON }},
+	{ 173, { "Sniper Ammo", item_rarity::COMMON }},
+	{ 129, { "Arrow", item_rarity::COMMON }},
+	{ 176, { "Rampage", item_rarity::COMMON }},
+	{ 183, { "Car SMG", item_rarity::HEIRLOOM }},
+	{ 164, { "Nemesis", item_rarity::COMMON }},
+	{ 221, { "Pheonix Kit", item_rarity::EPIC }},
+	{ 222, { "Med Kit", item_rarity::RARE }},
+	{ 223, { "Syringe", item_rarity::COMMON }},
+	{ 224, { "Shield Battery", item_rarity::RARE }},
+	{ 225, { "Shield Cell", item_rarity::COMMON }},
+	{ 243, { "Body Armor[L1]", item_rarity::COMMON }},
+	{ 244, { "Body Armor[L2]", item_rarity::RARE }},
+	{ 245, { "Body Armor[L3]", item_rarity::EPIC }},
+	{ 246, { "Body Armor[L4]", item_rarity::HEIRLOOM }},
+	{ 369, { "Evo Cache", item_rarity::LEGENDARY}},
+	{ 237, { "Heat Shield", item_rarity::HEIRLOOM }},
+	{ 184, { "Knockdown Shield[L1]", item_rarity::COMMON }},
+	{ 185, { "Knockdown Shield[L2]", item_rarity::RARE }},
+	{ 186, { "Knockdown Shield[L3]", item_rarity::EPIC }},
+	{ 187, { "Knockdown Shield[L4]", item_rarity::LEGENDARY }},
+	{ 252, { "Backpack[L1]", item_rarity::COMMON }},
+	{ 253, { "Backpack[L2]", item_rarity::RARE }},
+	{ 254, { "Backpack[L3]", item_rarity::EPIC }},
+	{ 255, { "Backpack[L4]", item_rarity::LEGENDARY }},
+	{ 257, { "Thermite Grenade", item_rarity::COMMON }},
+	{ 258, { "Frag Grenade", item_rarity::COMMON }},
+	{ 259, { "Arc Star", item_rarity::COMMON }},
+	{ 260, { "1x HCOG 'Classic'", item_rarity::COMMON }},
+	{ 261, { "2x HCOG 'Bruiser'", item_rarity::RARE }},
+	{ 197, { "1x Holo", item_rarity::COMMON }},
+	{ 263, { "1x-2x Variable Holo", item_rarity::RARE }},
+	{ 199, { "1x Digital Threat", item_rarity::LEGENDARY }},
+	{ 265, { "3x HCOG 'Ranger'", item_rarity::EPIC }},
+	{ 266, { "2x-4x Variable AOG", item_rarity::EPIC }},
+	{ 267, { "6x Sniper", item_rarity::RARE }},
+	{ 268, { "4x-8x Variable Sniper", item_rarity::EPIC }},
+	{ 269, { "4x-10x Digital Sniper Threat", item_rarity::LEGENDARY }},
+	{ 270, { "Barrel Stabilizer[L1]", item_rarity::COMMON }},
+	{ 271, { "Barrel Stabilizer[L2]", item_rarity::RARE }},
+	{ 272, { "Barrel Stabilizer[L3]", item_rarity::EPIC }},
+	{ 277, { "Light Magazine[L1]", item_rarity::COMMON }},
+	{ 278, { "Light Magazine[L2]", item_rarity::RARE }},
+	{ 279, { "Light Magazine[L3]", item_rarity::EPIC }},
+	{ 280, { "Light Magazine[L4]", item_rarity::LEGENDARY }},
+	{ 281, { "Heavy Magazine[L1]", item_rarity::COMMON }},
+	{ 282, { "Heavy Magazine[L2]", item_rarity::RARE }},
+	{ 283, { "Heavy Magazine[L3]", item_rarity::EPIC }},
+	{ 284, { "Heavy Magazine[L4]", item_rarity::LEGENDARY }},
+	{ 285, { "Energy Magazine[L1]", item_rarity::COMMON }},
+	{ 286, { "Energy Magazine[L2]", item_rarity::RARE }},
+	{ 287, { "Energy Magazine[L3]", item_rarity::EPIC }},
+	{ 288, { "Energy Magazine[L4]", item_rarity::LEGENDARY }},
+	{ 289, { "Sniper Magazine[L1]", item_rarity::COMMON }},
+	{ 290, { "Sniper Magazine[L2]", item_rarity::RARE }},
+	{ 291, { "Sniper Magazine[L3]", item_rarity::EPIC }},
+	{ 292, { "Sniper Magazine[L4]", item_rarity::LEGENDARY }},
+	{ 293, { "Shotgun Bolt[L1]", item_rarity::COMMON }},
+	{ 294, { "Shotgun Bolt[L2]", item_rarity::RARE }},
+	{ 295, { "Shotgun Bolt[L3]", item_rarity::EPIC }},
+	{ 296, { "Shotgun Bolt[L4]", item_rarity::LEGENDARY } },
+	{ 273, { "Laser Sight[L1]", item_rarity::COMMON }},
+	{ 274, { "Laser Sight[L2]", item_rarity::RARE }},
+	{ 275, { "Laser Sight[L3]", item_rarity::EPIC }},
+	{ 276, { "Laser Sight[L4]", item_rarity::LEGENDARY } },
+	{ 297, { "Standard Stock[L1]", item_rarity::COMMON }},
+	{ 298, { "Standard Stock[L2]", item_rarity::RARE }},
+	{ 299, { "Standard Stock[L3]", item_rarity::EPIC }},
+	{ 300, { "Sniper Stock[L1]", item_rarity::COMMON }},
+	{ 301, { "Sniper Stock[L2]", item_rarity::RARE }},
+	{ 302, { "Sniper Stock[L3]", item_rarity::EPIC }},
+	{ 303, { "Sniper Stock[L4]", item_rarity::LEGENDARY } },
+	{ 234, { "Turbocharger", item_rarity::LEGENDARY }},
+	{ 238, { "Hammer Point", item_rarity::EPIC }},
+	{ 237, { "Skull Piercer", item_rarity::LEGENDARY } },
+	{ 245, { "Deadeye's Tempo", item_rarity::EPIC } },
+	{ 246, { "Quickdraw Holster", item_rarity::EPIC } },
+	{ 247, { "Shatter Caps", item_rarity::EPIC }},
+	{ 248, { "Kinetic Feeder", item_rarity::EPIC } },
+	{ 249, { "Boosted Loader", item_rarity::LEGENDARY }},
+	{ 245, { "Mobile Respawn Beacon", item_rarity::RARE }},
+	{ 246, { "Vault Key", item_rarity::HEIRLOOM }},
+	{ 248, { "Treasure Pack", item_rarity::HEIRLOOM }},
+	{ 249, { "Survival Doubler", item_rarity::HEIRLOOM }},
+	{ 250, { "Survival Quadrupler", item_rarity::HEIRLOOM }},
+	{ 251, { "Heat Shield", item_rarity::RARE }},
+	{ 252, { "Mobile Respawn Beacon 2", item_rarity::RARE }},
+	{ 253, { "Treasure Pack", item_rarity::HEIRLOOM }},
+	{ 254, { "Vault Key", item_rarity::HEIRLOOM }},
+	{ 256, { "Knife", item_rarity::HEIRLOOM }},
+	{ 397, { "Patrol Kit", item_rarity::LEGENDARY }},
+	{ 345, { "Evac Tower", item_rarity::RARE } },
+	{ 220, { "Ultimate Accelerant", item_rarity::EPIC } },
+	{ 393, { "Increased Power", item_rarity::EPIC } },
+	{ 392, { "Excess Care", item_rarity::EPIC } },
+	{ 391, { "Inexhaustible Batteries", item_rarity::EPIC } },
+	{ 394, { "Mega-Armor", item_rarity::EPIC } },
+	{ 390, { "Infinite Ammo", item_rarity::EPIC } }
+};
+Last edited by killogram; 16th March 2026 at 01:53 AM.
+killogram is offline
+Last Active: 11th May 2026
+
+Add to killogram's Reputation Take from killogram's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th March 2026, 12:24 AM	  #1224
+cloudhoter
+Hacker Supreme
+
+
+cloudhoter's Avatar
+
+Join Date: Oct 2022
+Location: PRC
+Posts: 232
+Reputation: 4777
+Rep Power: 107
+cloudhoter is a legend in the cheating communitycloudhoter is a legend in the cheating communitycloudhoter is a legend in the cheating communitycloudhoter is a legend in the cheating communitycloudhoter is a legend in the cheating communitycloudhoter is a legend in the cheating communitycloudhoter is a legend in the cheating communitycloudhoter is a legend in the cheating communitycloudhoter is a legend in the cheating communitycloudhoter is a legend in the cheating communitycloudhoter is a legend in the cheating community
+Points: 9,930, Level: 12
+Points: 9,930, Level: 12	Points: 9,930, Level: 12	Points: 9,930, Level: 12
+Level up: 11%, 1,070 Points needed
+Level up: 11%	Level up: 11%	Level up: 11%
+Activity: 2.5%
+Activity: 2.5%	Activity: 2.5%	Activity: 2.5%
+Last Achievements
+Apex Reversal, Structs and OffsetsApex Reversal, Structs and OffsetsApex Reversal, Structs and Offsets
+hi guys, looks like I need update my legends name map
+Code:
+        Legends[LanguageID::LegendsDummie] = xorstr_("dummie");
+        Legends[LanguageID::LegendsBangalore] = xorstr_("bangalore");
+        Legends[LanguageID::LegendsFuse] = xorstr_("fuse");
+        Legends[LanguageID::LegendsAsh] = xorstr_("ash");
+        Legends[LanguageID::LegendsMadMaggie] = xorstr_("madmaggie");
+        Legends[LanguageID::LegendsBallistic] = xorstr_("ballistic");
+        Legends[LanguageID::LegendsPathFinder] = xorstr_("pathfinder");
+        Legends[LanguageID::LegendsWraith] = xorstr_("wraith");
+        Legends[LanguageID::LegendsStim] = xorstr_("stim");
+        Legends[LanguageID::LegendsRevenant] = xorstr_("revenant");
+        Legends[LanguageID::LegendsNova] = xorstr_("nova");
+        Legends[LanguageID::LegendsValkyrie] = xorstr_("valkyrie");
+        Legends[LanguageID::LegendsBloodhound] = xorstr_("bloodhound");
+        Legends[LanguageID::LegendsCrypto] = xorstr_("crypto");
+        Legends[LanguageID::LegendsSeer] = xorstr_("seer");
+        Legends[LanguageID::LegendsVantage] = xorstr_("vantage");
+        Legends[LanguageID::LegendsGibraltar] = xorstr_("gibraltar");
+        Legends[LanguageID::LegendsLifeline] = xorstr_("lifeline");
+        Legends[LanguageID::LegendsHolo] = xorstr_("holo");
+        Legends[LanguageID::LegendsLoba] = xorstr_("loba");
+        Legends[LanguageID::LegendsNewcastle] = xorstr_("newcastle");
+        Legends[LanguageID::LegendsConduit] = xorstr_("conduit");
+        Legends[LanguageID::LegendsCaustic] = xorstr_("caustic");
+        Legends[LanguageID::LegendsWattson] = xorstr_("wattson");
+        Legends[LanguageID::LegendsRampart] = xorstr_("rampart");
+        Legends[LanguageID::LegendsCatalyst] = xorstr_("catalyst");
+        Legends[LanguageID::LegendsAlter] = xorstr_("alter");
+        Legends[LanguageID::LegendsSparrow] = xorstr_("sparrow");
+I noticed that some legend's model using new names, such as "stim"->"octane"
+I use strstr to find model name to get legend type
+someone have more infomation could share? please
+I have long time not update the Get Legends Name fuction
+so, maybe have new method to get it? 
+cloudhoter is offline
+Last Active: Today
+
+Add to cloudhoter's Reputation Take from cloudhoter's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th March 2026, 02:15 AM	  #1225
+qingchan
+Senior Member
+
+
+qingchan's Avatar
+
+Join Date: Aug 2022
+Posts: 85
+Reputation: 8
+Rep Power: 0
+qingchan has a near-average in quality posting ability
+Points: 3,142, Level: 5
+Points: 3,142, Level: 5	Points: 3,142, Level: 5	Points: 3,142, Level: 5
+Level up: 43%, 458 Points needed
+Level up: 43%	Level up: 43%	Level up: 43%
+Activity: 6.7%
+Activity: 6.7%	Activity: 6.7%	Activity: 6.7%
+Last Achievements
+Apex Reversal, Structs and OffsetsApex Reversal, Structs and OffsetsApex Reversal, Structs and Offsets
+constexpr auto m_weaponNameIndex = 0x15f0;
+INT64 wephandle = Read<INT64>(LocalPlayer + Offsets::m_latestPrimaryWeapons - 0x14) & 0xFFFF;
+UINT64 WeaponPtr = Read<UINT64>(ImageBase + Offsets::EntityList + (wephandle << 5));
+int WeaponIndex = Read<int>(WeaponPtr + Offsets::m_weaponNameIndex);
+Did I write it wrong?
+qingchan is offline
+Last Active: 20th November 2026
+
+Add to qingchan's Reputation Take from qingchan's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th March 2026, 02:52 AM	  #1226
+SMTXXX
+Supreme G0d
+
+
+SMTXXX's Avatar
+
+Join Date: May 2018
+Location: outer space
+Posts: 370
+Reputation: 5903
+Rep Power: 216
+SMTXXX DEFINES UNKNOWNCHEATSSMTXXX DEFINES UNKNOWNCHEATSSMTXXX DEFINES UNKNOWNCHEATSSMTXXX DEFINES UNKNOWNCHEATSSMTXXX DEFINES UNKNOWNCHEATSSMTXXX DEFINES UNKNOWNCHEATSSMTXXX DEFINES UNKNOWNCHEATSSMTXXX DEFINES UNKNOWNCHEATSSMTXXX DEFINES UNKNOWNCHEATSSMTXXX DEFINES UNKNOWNCHEATSSMTXXX DEFINES UNKNOWNCHEATS
+Points: 14,037, Level: 15
+Points: 14,037, Level: 15	Points: 14,037, Level: 15	Points: 14,037, Level: 15
+Level up: 32%, 963 Points needed
+Level up: 32%	Level up: 32%	Level up: 32%
+Activity: 5.6%
+Activity: 5.6%	Activity: 5.6%	Activity: 5.6%
+Last Achievements
+Apex Reversal, Structs and OffsetsApex Reversal, Structs and OffsetsApex Reversal, Structs and Offsets
+Quote:
+Originally Posted by qwerttyyu View Post
+dont work sad
+I can most definitely confirm that these do work as of today.
+
+Code:
+Miscellaneous
+Entity List: 0x644d138
+Local Player: 0x282d298
+View Matrix: 0x11a350
+View Render: 0x76236A0
+ 
+Player Core and Location
+Team Number: 0x334
+Local Origin: 0x17c
+Signifier Name: 0x470
+View Models: 0x2e00
+ 
+Player Health, Armor, and Status
+Health: 0x324
+Shield Health: 0x1a0
+Armor Type: 0x464
+Life State: 0x690
+ 
+Glow and Highlights
+Highlight Settings: 0x6b96e40
+Highlight Function Bits: 0x310
+Highlight Server Context ID: 0x320
+
+
+Quote:
+Originally Posted by qwerttyyu View Post
+dont work sad
+I can most definitely confirm that these do work as of today.
+
+Code:
+Miscellaneous
+Entity List: 0x644d138
+Local Player: 0x282d298
+View Matrix: 0x11a350
+View Render: 0x76236A0
+ 
+Player Core and Location
+Team Number: 0x334
+Local Origin: 0x17c
+Signifier Name: 0x470
+View Models: 0x2e00
+ 
+Player Health, Armor, and Status
+Health: 0x324
+Shield Health: 0x1a0
+Armor Type: 0x464
+Life State: 0x690
+ 
+Glow and Highlights
+Highlight Settings: 0x6b96e40
+Highlight Function Bits: 0x310
+Highlight Server Context ID: 0x320
+
+__________________
+
+SMTXXX is online now
+Last Active: Today
+
+Add to SMTXXX's Reputation Take from SMTXXX's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th March 2026, 03:05 AM	  #1227
+qwerttyyu
+Junior Member
+
+
+qwerttyyu's Avatar
+
+Join Date: Jan 2026
+Posts: 47
+Reputation: -105
+Rep Power: 0
+qwerttyyu is an outcastqwerttyyu is an outcast
+Points: 396, Level: 1
+Points: 396, Level: 1	Points: 396, Level: 1	Points: 396, Level: 1
+Level up: 99%, 4 Points needed
+Level up: 99%	Level up: 99%	Level up: 99%
+Activity: 6.3%
+Activity: 6.3%	Activity: 6.3%	Activity: 6.3%
+Unhappy
+Quote:
+Originally Posted by killogram View Post
+Code:
+#define OFF_OBSERVER_LIST 0x644f158 //ObserverList
+#define OFF_OBSERVER_LIST_IN_ARRAY 0x964 //m_gameTimescale
+
+
+Code:
+#define OFFSET_HIGHLIGHTSETTINGS 0x6b96e40
+#define OFFSET_HIGHLIGHTSERVERACTIVESTATES  0x298      //OFF_GLOW_HIGHLIGHT_ID 0x298 
+#define OFFSET_GLOW_ENABLE  0x28C       // OFF_GLOW_ENABLE 
+#define OFFSET_HIGHLIGHTVISIBILITYTYPE  0x26c       //OFF_GLOW_THROUGH_WALL 0x278
+#define OFFSET_HIGHLIGHT_TYPE_SIZE 0x34
+#define GLOW_DISTANCE 0x294 // Highlight_SetFarFadeDist
+Code:
+static float GlowVisible[4] = { 0.0f, 1.0f, 0.0f, 1.0f };
+static float GlowInvisible[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
+ 
+void GlowFeature::InitializeGlowSettings() {
+    if (initialized || !g_Driver || !g_ApexBase) return;
+    g_Driver->ForceFlush();
+    uintptr_t highlightSettings = Read<uintptr_t>(g_ApexBase + OFF_GLOW_HIGHLIGHTSettings);
+    if (!highlightSettings) return;
+ 
+    HighlightFunctionBits functionBits;
+    functionBits.functionBits[0] = 2;
+    functionBits.functionBits[1] = 125;
+    functionBits.functionBits[2] = 64;
+    functionBits.functionBits[3] = 64; // 渲染方式相同
+ 
+    // 可见索引 (70)
+    HighlightParameter visibleParam;
+    for (int i = 0; i < 4; ++i) visibleParam.parameter[i] = GlowVisible[i];
+    Write<HighlightFunctionBits>(highlightSettings + OFF_HIGHLIGHT_TYPE_SIZE * visibleIndex + 0, functionBits);
+    Write<HighlightParameter>(highlightSettings + OFF_HIGHLIGHT_TYPE_SIZE * visibleIndex + 4, visibleParam);
+ 
+    // 不可见索引 (80)
+    HighlightParameter invisibleParam;
+    for (int i = 0; i < 4; ++i) invisibleParam.parameter[i] = GlowInvisible[i];
+    Write<HighlightFunctionBits>(highlightSettings + OFF_HIGHLIGHT_TYPE_SIZE * invisibleIndex + 0, functionBits);
+    Write<HighlightParameter>(highlightSettings + OFF_HIGHLIGHT_TYPE_SIZE * invisibleIndex + 4, invisibleParam);
+ 
+    initialized = true;
+}
+ 
+void GlowFeature::SetEntityGlow(const Entity& entity, bool isVisible) {
+    if (!entity.address) return;
+ 
+    int targetIndex = isVisible ? visibleIndex : invisibleIndex;
+ 
+    auto it = entityGlowState.find(entity.address);
+    if (it != entityGlowState.end() && it->second == targetIndex) {
+        return; // 状态未变
+    }
+ 
+    Write<int>(entity.address + OFF_GLOW_THROUGH_WALL, 1);
+    Write<int>(entity.address + OFF_GLOW_FIX, 2);
+    Write<float>(entity.address + OFF_GLOW_DISTANCE, 99999.0f);
+    Write<int>(entity.address + OFF_GLOW_ENABLE, 1);
+    Write<int>(entity.address + OFF_GLOW_HIGHLIGHT_ID + 0, targetIndex);
+ 
+    entityGlowState[entity.address] = targetIndex;
+}
+ 
+void GlowFeature::DisableEntityGlow(uintptr_t entityAddress) {
+    if (!entityAddress) return;
+    Write<int>(entityAddress + OFF_GLOW_HIGHLIGHT_ID + 0, 0);
+    Write<int>(entityAddress + OFF_GLOW_THROUGH_WALL, 0);
+    Write<int>(entityAddress + OFF_GLOW_FIX, 0);
+    Write<float>(entityAddress + OFF_GLOW_DISTANCE, 0.0f);
+    Write<int>(entityAddress + OFF_GLOW_ENABLE, 0);
+}
+ 
+void GlowFeature::SetEnabled(bool enabled) {
+    bool oldState = g_GlowEnabled;
+    g_GlowEnabled = enabled;
+ 
+    if (oldState && !enabled) {
+        for (const auto& pair : entityGlowState) {
+            DisableEntityGlow(pair.first);
+        }
+        entityGlowState.clear();
+    }
+}
+ 
+void GlowFeature::Update(uintptr_t localPlayerPtr, uintptr_t gameBase) {
+    if (!IsEnabled()) return;
+ 
+    DWORD now = GetTickCount();
+    if (now - lastUpdateTime < UPDATE_INTERVAL) return;
+    lastUpdateTime = now;
+ 
+    if (!initialized) {
+        InitializeGlowSettings();
+    }
+ 
+    std::vector<Entity> entities;
+    {
+        std::lock_guard<std::mutex> lock(g_EntityMutex);
+        entities = g_Entities;
+    }
+ 
+    // 清理已消失的实体记录
+    for (auto it = entityGlowState.begin(); it != entityGlowState.end(); ) {
+        bool found = false;
+        for (const auto& ent : entities) {
+            if (ent.address == it->first) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            it = entityGlowState.erase(it);
+        }
+        else {
+            ++it;
+        }
+    }
+ 
+    // 处理有效实体（距离≤400米）
+    for (const auto& entity : entities) {
+        if (!entity.valid) continue;
+        if (entity.health <= 0) continue;
+        if (entity.team == g_LocalTeam && !entity.isDummy) continue;
+        if (entity.distance > 400.0f) continue; // 距离限制
+ 
+        SetEntityGlow(entity, entity.isVisible);
+    }
+}
+DONT WORK THANK U ALOT
+qwerttyyu is offline
+Last Active: 15th April 2026
+
+Add to qwerttyyu's Reputation Take from qwerttyyu's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th March 2026, 04:26 AM	  #1228
+ApexCV
+Hacked North Korea
+
+ApexCV's Avatar
+
+Join Date: Feb 2024
+Posts: 2,858
+Reputation: 14877
+Rep Power: 110
+ApexCV 's rep takes up 1 gig of server spaceApexCV 's rep takes up 1 gig of server spaceApexCV 's rep takes up 1 gig of server spaceApexCV 's rep takes up 1 gig of server spaceApexCV 's rep takes up 1 gig of server spaceApexCV 's rep takes up 1 gig of server spaceApexCV 's rep takes up 1 gig of server spaceApexCV 's rep takes up 1 gig of server spaceApexCV 's rep takes up 1 gig of server spaceApexCV 's rep takes up 1 gig of server spaceApexCV 's rep takes up 1 gig of server space
+Points: 41,936, Level: 31
+Points: 41,936, Level: 31	Points: 41,936, Level: 31	Points: 41,936, Level: 31
+Level up: 5%, 2,664 Points needed
+Level up: 5%	Level up: 5%	Level up: 5%
+Activity: 5.0%
+Activity: 5.0%	Activity: 5.0%	Activity: 5.0%
+Last Achievements
+Apex Reversal, Structs and OffsetsApex Reversal, Structs and OffsetsApex Reversal, Structs and Offsets
+OFFSET_HIGHLIGHT_ID 0x298 #[RecvTable.DT_HighlightSettings]m_highlightGenericContexts - 0x01
+OFFSET_HIGHLIGHT_WALLHACK 0x26c #
+OFFSET_HIGHLIGHT_DISTANCE 0x264
+
+these are still the same as last season.
+ApexCV is online now
+Last Active: Today
+
+Add to ApexCV's Reputation Take from ApexCV's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th March 2026, 05:38 AM	  #1229
+0zero00
+Senior Member
+
+
+0zero00's Avatar
+
+Join Date: Sep 2024
+Posts: 86
+Reputation: 10
+Rep Power: 54
+0zero00 has made posts that are generally average in quality
+Points: 1,736, Level: 3
+Points: 1,736, Level: 3	Points: 1,736, Level: 3	Points: 1,736, Level: 3
+Level up: 48%, 364 Points needed
+Level up: 48%	Level up: 48%	Level up: 48%
+Activity: 5.6%
+Activity: 5.6%	Activity: 5.6%	Activity: 5.6%
+Last Achievements
+Apex Reversal, Structs and Offsets
+anyone know how to check the localplayer weapond im currently holding? please send code 
+0zero00 is offline
+Last Active: Today
+
+Add to 0zero00's Reputation Take from 0zero00's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th March 2026, 06:23 AM	  #1230
+Gerosity
+Lover of "cars"
+
+Gerosity's Avatar
+
+Join Date: Sep 2020
+Location: britain
+Posts: 1,991
+Reputation: 17707
+Rep Power: 187
+Gerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UC
+Recognitions
+Award symbolizing a retired staff member who dedicated a notable amount of time and effort to their past staff position. Former Staff
+Points: 62,790, Level: 37
+Points: 62,790, Level: 37	Points: 62,790, Level: 37	Points: 62,790, Level: 37
+Level up: 11%, 3,410 Points needed
+Level up: 11%	Level up: 11%	Level up: 11%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+Last Achievements
+Apex Reversal, Structs and OffsetsApex Reversal, Structs and OffsetsApex Reversal, Structs and Offsets
+Quote:
+Originally Posted by 0zero00 View Post
+anyone know how to check the localplayer weapond im currently holding? please send code 
+my guess is that this still works, don't see why it wouldn't
+Code:
+uintptr_t WeaponHandle = Memory::Read<uintptr_t>(Globals::LocalPlayer.BasePointer + Offsets::DT_Player::m_latestPrimaryWeapons);
+uintptr_t WeaponHandleMasked = WeaponHandle & 0xffff;
+Globals::LocalPlayer.WeaponEntity = Memory::Read<uintptr_t>(Memory::Base + Offsets::Miscellaneous::cl_entitylist + (WeaponHandleMasked << 5));
+Globals::LocalPlayer.WeaponIndex = Memory::Read<int>(Globals::LocalPlayer.WeaponEntity + Offsets::DT_WeaponX::m_weaponNameIndex);
+__________________
+cats r awesome sauce
+
+Past Projects: zap-client [Legitbot, Ragebot, Glow, ESP & More] - Patience - An External Linux Cheat [Overlay/CLI]
+Useful Pages: Site Rules - FAQ
+Currently Listening To: Liar, puppy - Violet Chambers
+Last edited by Gerosity; 16th March 2026 at 06:24 AM.
+Gerosity is offline
+Last Active: 23rd November 2026
+
+Add to Gerosity's Reputation Take from Gerosity's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th March 2026, 06:56 AM	  #1231
+m4pg
+n00bie
+
+
+m4pg's Avatar
+
+Join Date: Jan 2026
+Location: LCPD
+Posts: 10
+Reputation: 127
+Rep Power: 21
+m4pg is in the shadow of all hacking legendsm4pg is in the shadow of all hacking legends
+Points: 329, Level: 1
+Points: 329, Level: 1	Points: 329, Level: 1	Points: 329, Level: 1
+Level up: 83%, 71 Points needed
+Level up: 83%	Level up: 83%	Level up: 83%
+Activity: 3.1%
+Activity: 3.1%	Activity: 3.1%	Activity: 3.1%
+Wink
+Quote:
+Originally Posted by cloudhoter View Post
+hi guys, looks like I need update my legends name map
+Code:
+        Legends[LanguageID::LegendsDummie] = xorstr_("dummie");
+        Legends[LanguageID::LegendsBangalore] = xorstr_("bangalore");
+        Legends[LanguageID::LegendsFuse] = xorstr_("fuse");
+        Legends[LanguageID::LegendsAsh] = xorstr_("ash");
+        Legends[LanguageID::LegendsMadMaggie] = xorstr_("madmaggie");
+        Legends[LanguageID::LegendsBallistic] = xorstr_("ballistic");
+        Legends[LanguageID::LegendsPathFinder] = xorstr_("pathfinder");
+        Legends[LanguageID::LegendsWraith] = xorstr_("wraith");
+        Legends[LanguageID::LegendsStim] = xorstr_("stim");
+        Legends[LanguageID::LegendsRevenant] = xorstr_("revenant");
+        Legends[LanguageID::LegendsNova] = xorstr_("nova");
+        Legends[LanguageID::LegendsValkyrie] = xorstr_("valkyrie");
+        Legends[LanguageID::LegendsBloodhound] = xorstr_("bloodhound");
+        Legends[LanguageID::LegendsCrypto] = xorstr_("crypto");
+        Legends[LanguageID::LegendsSeer] = xorstr_("seer");
+        Legends[LanguageID::LegendsVantage] = xorstr_("vantage");
+        Legends[LanguageID::LegendsGibraltar] = xorstr_("gibraltar");
+        Legends[LanguageID::LegendsLifeline] = xorstr_("lifeline");
+        Legends[LanguageID::LegendsHolo] = xorstr_("holo");
+        Legends[LanguageID::LegendsLoba] = xorstr_("loba");
+        Legends[LanguageID::LegendsNewcastle] = xorstr_("newcastle");
+        Legends[LanguageID::LegendsConduit] = xorstr_("conduit");
+        Legends[LanguageID::LegendsCaustic] = xorstr_("caustic");
+        Legends[LanguageID::LegendsWattson] = xorstr_("wattson");
+        Legends[LanguageID::LegendsRampart] = xorstr_("rampart");
+        Legends[LanguageID::LegendsCatalyst] = xorstr_("catalyst");
+        Legends[LanguageID::LegendsAlter] = xorstr_("alter");
+        Legends[LanguageID::LegendsSparrow] = xorstr_("sparrow");
+I noticed that some legend's model using new names, such as "stim"->"octane"
+I use strstr to find model name to get legend type
+someone have more infomation could share? please
+I have long time not update the Get Legends Name fuction
+so, maybe have new method to get it? 
+Code:
+static const std::unordered_map<std::string, std::string> legendmodel_map = {
+    {skCrypt("dummie").decrypt(),     skCrypt("BOT").decrypt()},
+    {skCrypt("bangalore").decrypt(),  skCrypt("Bangalore").decrypt()},
+    {skCrypt("fuse").decrypt(),       skCrypt("Fuse").decrypt()},
+    {skCrypt("ash").decrypt(),        skCrypt("Ash").decrypt()},
+    {skCrypt("madmaggie").decrypt(),  skCrypt("Madmaggie").decrypt()},
+    {skCrypt("ballistic").decrypt(),  skCrypt("Ballistic").decrypt()},
+    {skCrypt("pathfinder").decrypt(), skCrypt("Pathfinder").decrypt()},
+    {skCrypt("octane").decrypt(),     skCrypt("Octane").decrypt()},
+    {skCrypt("stim").decrypt(),       skCrypt("Octane").decrypt()},
+    {skCrypt("revenant").decrypt(),   skCrypt("Revenant").decrypt()},
+    {skCrypt("nova").decrypt(),       skCrypt("Horizon").decrypt()},
+    {skCrypt("horizon").decrypt(),    skCrypt("Horizon").decrypt()},
+    {skCrypt("alter").decrypt(),      skCrypt("Alter").decrypt()},
+    {skCrypt("valkyrie").decrypt(),   skCrypt("Valkyrie").decrypt()},
+    {skCrypt("bloodhound").decrypt(), skCrypt("Bloodhound").decrypt()},
+    {skCrypt("crypto").decrypt(),     skCrypt("Crypto").decrypt()},
+    {skCrypt("seer").decrypt(),       skCrypt("Seer").decrypt()},
+    {skCrypt("wraith").decrypt(),     skCrypt("Wraith").decrypt()},
+    {skCrypt("vantage").decrypt(),    skCrypt("Vantage").decrypt()},
+    {skCrypt("gibraltar").decrypt(),  skCrypt("Gibraltar").decrypt()},
+    {skCrypt("lifeline").decrypt(),   skCrypt("Lifeline").decrypt()},
+    {skCrypt("loba").decrypt(),       skCrypt("Loba").decrypt()},
+    {skCrypt("holo").decrypt(),       skCrypt("Mirage").decrypt()},
+    {skCrypt("mirage").decrypt(),     skCrypt("Mirage").decrypt()},
+    {skCrypt("newcastle").decrypt(),  skCrypt("Newcastle").decrypt()},
+    {skCrypt("conduit").decrypt(),    skCrypt("Conduit").decrypt()},
+    {skCrypt("caustic").decrypt(),    skCrypt("Caustic").decrypt()},
+    {skCrypt("wattson").decrypt(),    skCrypt("Wattson").decrypt()},
+    {skCrypt("rampart").decrypt(),    skCrypt("Rampart").decrypt()},
+    {skCrypt("catalyst").decrypt(),   skCrypt("Catalyst").decrypt()},
+    {skCrypt("sparrow").decrypt(),    skCrypt("Sparrow").decrypt()}
+};
+m4pg is offline
+Last Active: 23rd November 2026
+
+Add to m4pg's Reputation Take from m4pg's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th March 2026, 02:47 PM	  #1232
+killogram
+Banned
+
+killogram's Avatar
+
+Join Date: Jan 2026
+Location: Canada
+Posts: 130
+Reputation: 306
+Rep Power: 22
+killogram has dreams of becoming a modkillogram has dreams of becoming a modkillogram has dreams of becoming a modkillogram has dreams of becoming a mod
+Points: 893, Level: 1
+Points: 893, Level: 1	Points: 893, Level: 1	Points: 893, Level: 1
+Level up: 99%, 7 Points needed
+Level up: 99%	Level up: 99%	Level up: 99%
+Activity: 14.0%
+Activity: 14.0%	Activity: 14.0%	Activity: 14.0%
+abut this i have the right offsets ?
+
+Code:
+    constexpr auto viewAngles = 0x2614; // m_ammoPoolCapacity - 0x14
+    constexpr auto breathAngles = viewAngles - 0x10;
+    constexpr auto punchAngles = 0x2518; //m_currentFrameLocalPlayer.m_vecPunchWeapon_Angle
+    constexpr auto yaw = 0x231c - 0x8; //m_currentFramePlayer.m_ammoPoolCount - 0x8
+    constexpr auto projectileSpeed = 0x1ae0 + 0xd80;
+    constexpr auto projectileScale = 0x1ae0 + 0xd88;
+killogram is offline
+Last Active: 11th May 2026
+
+Add to killogram's Reputation Take from killogram's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th March 2026, 04:56 PM	  #1233
+SpainHachis
+n00bie
+
+
+SpainHachis's Avatar
+
+Join Date: Feb 2026
+Posts: 7
+Reputation: 10
+Rep Power: 20
+SpainHachis has made posts that are generally average in quality
+Points: 112, Level: 1
+Points: 112, Level: 1	Points: 112, Level: 1	Points: 112, Level: 1
+Level up: 28%, 288 Points needed
+Level up: 28%	Level up: 28%	Level up: 28%
+Activity: 7.5%
+Activity: 7.5%	Activity: 7.5%	Activity: 7.5%
+What's the LocalPlayer for Apex Legends on Steam? I need help with Apex Legends DirectX 12 on Steam. Do you know if the offsets work correctly or if they have the necessary offsets?
+SpainHachis is offline
+Last Active: 29th July 2026
+
+Add to SpainHachis's Reputation Take from SpainHachis's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 17th March 2026, 07:27 AM	  #1234
+OXYGENmase
+Member
+
+
+OXYGENmase's Avatar
+
+Join Date: Jan 2024
+Location: The Kernel
+Posts: 72
+Reputation: 404
+Rep Power: 70
+OXYGENmase has stol33n The c0d3OXYGENmase has stol33n The c0d3OXYGENmase has stol33n The c0d3OXYGENmase has stol33n The c0d3OXYGENmase has stol33n The c0d3
+Points: 2,965, Level: 5
+Points: 2,965, Level: 5	Points: 2,965, Level: 5	Points: 2,965, Level: 5
+Level up: 21%, 635 Points needed
+Level up: 21%	Level up: 21%	Level up: 21%
+Activity: 6.4%
+Activity: 6.4%	Activity: 6.4%	Activity: 6.4%
+Last Achievements
+Apex Reversal, Structs and Offsets
+Quote:
+Originally Posted by killogram View Post
+if anyone need its updated : https://i.postimg.cc/7Ljb7qPs/Sans-titre.png
+
+Code:
+std::map<uint32_t, c_props> item_map = {
+	{ 1, { "Kraber", item_rarity::HEIRLOOM }},
+	{ 2, { "Mastiff", item_rarity::COMMON }},
+	{ 6, { "Mastiff Gold", item_rarity::LEGENDARY }},
+	{ 8, { "LStar", item_rarity::COMMON }},
+	{ 14, { "Havoc", item_rarity::COMMON }},
+	{ 20, { "Devotion", item_rarity::COMMON }},
+	{ 26, { "Triple Take", item_rarity::COMMON }},
+	{ 32, { "Flatline", item_rarity::COMMON }},
+	{ 37, { "Hemlock", item_rarity::COMMON }},
+	{ 44, { "G7 Scout", item_rarity::HEIRLOOM }},
+	{ 49, { "Alternator", item_rarity::COMMON }},
+	{ 55, { "R99", item_rarity::COMMON }},
+	{ 61, { "Prowler", item_rarity::COMMON }},
+	{ 57, { "Volt", item_rarity::LEGENDARY }},
+	{ 72, { "Longbow", item_rarity::COMMON }},
+	{ 77, { "Charge Rifle", item_rarity::COMMON }},
+	{ 67, { "Volt", item_rarity::COMMON }},
+	{ 82, { "Spitfire", item_rarity::COMMON }},
+	{ 87, { "R301", item_rarity::COMMON }},
+	{ 92, { "Eva-8", item_rarity::COMMON }},
+	{ 98, { "Peacekeeper", item_rarity::COMMON }},
+	{ 104, { "Mozambique", item_rarity::COMMON }},
+	{ 117, { "Wingman", item_rarity::COMMON }},
+	{ 123, { "P2020", item_rarity::COMMON }},
+	{ 136, { "RE45", item_rarity::COMMON }},
+	{ 145, { "Sentinel", item_rarity::COMMON }},
+	{ 152, { "Bocek", item_rarity::COMMON }},
+	{ 159, { "Repeater", item_rarity::COMMON }},
+	{ 169, { "Light Ammo", item_rarity::COMMON }},
+	{ 170, { "Energy Ammo", item_rarity::COMMON }},
+	{ 171, { "Shotgun Ammo", item_rarity::COMMON }},
+	{ 172, { "Heavy Ammo", item_rarity::COMMON }},
+	{ 173, { "Sniper Ammo", item_rarity::COMMON }},
+	{ 129, { "Arrow", item_rarity::COMMON }},
+	{ 176, { "Rampage", item_rarity::COMMON }},
+	{ 183, { "Car SMG", item_rarity::HEIRLOOM }},
+	{ 164, { "Nemesis", item_rarity::COMMON }},
+	{ 221, { "Pheonix Kit", item_rarity::EPIC }},
+	{ 222, { "Med Kit", item_rarity::RARE }},
+	{ 223, { "Syringe", item_rarity::COMMON }},
+	{ 224, { "Shield Battery", item_rarity::RARE }},
+	{ 225, { "Shield Cell", item_rarity::COMMON }},
+	{ 243, { "Body Armor[L1]", item_rarity::COMMON }},
+	{ 244, { "Body Armor[L2]", item_rarity::RARE }},
+	{ 245, { "Body Armor[L3]", item_rarity::EPIC }},
+	{ 246, { "Body Armor[L4]", item_rarity::HEIRLOOM }},
+	{ 369, { "Evo Cache", item_rarity::LEGENDARY}},
+	{ 237, { "Heat Shield", item_rarity::HEIRLOOM }},
+	{ 184, { "Knockdown Shield[L1]", item_rarity::COMMON }},
+	{ 185, { "Knockdown Shield[L2]", item_rarity::RARE }},
+	{ 186, { "Knockdown Shield[L3]", item_rarity::EPIC }},
+	{ 187, { "Knockdown Shield[L4]", item_rarity::LEGENDARY }},
+	{ 252, { "Backpack[L1]", item_rarity::COMMON }},
+	{ 253, { "Backpack[L2]", item_rarity::RARE }},
+	{ 254, { "Backpack[L3]", item_rarity::EPIC }},
+	{ 255, { "Backpack[L4]", item_rarity::LEGENDARY }},
+	{ 257, { "Thermite Grenade", item_rarity::COMMON }},
+	{ 258, { "Frag Grenade", item_rarity::COMMON }},
+	{ 259, { "Arc Star", item_rarity::COMMON }},
+	{ 260, { "1x HCOG 'Classic'", item_rarity::COMMON }},
+	{ 261, { "2x HCOG 'Bruiser'", item_rarity::RARE }},
+	{ 197, { "1x Holo", item_rarity::COMMON }},
+	{ 263, { "1x-2x Variable Holo", item_rarity::RARE }},
+	{ 199, { "1x Digital Threat", item_rarity::LEGENDARY }},
+	{ 265, { "3x HCOG 'Ranger'", item_rarity::EPIC }},
+	{ 266, { "2x-4x Variable AOG", item_rarity::EPIC }},
+	{ 267, { "6x Sniper", item_rarity::RARE }},
+	{ 268, { "4x-8x Variable Sniper", item_rarity::EPIC }},
+	{ 269, { "4x-10x Digital Sniper Threat", item_rarity::LEGENDARY }},
+	{ 270, { "Barrel Stabilizer[L1]", item_rarity::COMMON }},
+	{ 271, { "Barrel Stabilizer[L2]", item_rarity::RARE }},
+	{ 272, { "Barrel Stabilizer[L3]", item_rarity::EPIC }},
+	{ 277, { "Light Magazine[L1]", item_rarity::COMMON }},
+	{ 278, { "Light Magazine[L2]", item_rarity::RARE }},
+	{ 279, { "Light Magazine[L3]", item_rarity::EPIC }},
+	{ 280, { "Light Magazine[L4]", item_rarity::LEGENDARY }},
+	{ 281, { "Heavy Magazine[L1]", item_rarity::COMMON }},
+	{ 282, { "Heavy Magazine[L2]", item_rarity::RARE }},
+	{ 283, { "Heavy Magazine[L3]", item_rarity::EPIC }},
+	{ 284, { "Heavy Magazine[L4]", item_rarity::LEGENDARY }},
+	{ 285, { "Energy Magazine[L1]", item_rarity::COMMON }},
+	{ 286, { "Energy Magazine[L2]", item_rarity::RARE }},
+	{ 287, { "Energy Magazine[L3]", item_rarity::EPIC }},
+	{ 288, { "Energy Magazine[L4]", item_rarity::LEGENDARY }},
+	{ 289, { "Sniper Magazine[L1]", item_rarity::COMMON }},
+	{ 290, { "Sniper Magazine[L2]", item_rarity::RARE }},
+	{ 291, { "Sniper Magazine[L3]", item_rarity::EPIC }},
+	{ 292, { "Sniper Magazine[L4]", item_rarity::LEGENDARY }},
+	{ 293, { "Shotgun Bolt[L1]", item_rarity::COMMON }},
+	{ 294, { "Shotgun Bolt[L2]", item_rarity::RARE }},
+	{ 295, { "Shotgun Bolt[L3]", item_rarity::EPIC }},
+	{ 296, { "Shotgun Bolt[L4]", item_rarity::LEGENDARY } },
+	{ 273, { "Laser Sight[L1]", item_rarity::COMMON }},
+	{ 274, { "Laser Sight[L2]", item_rarity::RARE }},
+	{ 275, { "Laser Sight[L3]", item_rarity::EPIC }},
+	{ 276, { "Laser Sight[L4]", item_rarity::LEGENDARY } },
+	{ 297, { "Standard Stock[L1]", item_rarity::COMMON }},
+	{ 298, { "Standard Stock[L2]", item_rarity::RARE }},
+	{ 299, { "Standard Stock[L3]", item_rarity::EPIC }},
+	{ 300, { "Sniper Stock[L1]", item_rarity::COMMON }},
+	{ 301, { "Sniper Stock[L2]", item_rarity::RARE }},
+	{ 302, { "Sniper Stock[L3]", item_rarity::EPIC }},
+	{ 303, { "Sniper Stock[L4]", item_rarity::LEGENDARY } },
+	{ 234, { "Turbocharger", item_rarity::LEGENDARY }},
+	{ 238, { "Hammer Point", item_rarity::EPIC }},
+	{ 237, { "Skull Piercer", item_rarity::LEGENDARY } },
+	{ 245, { "Deadeye's Tempo", item_rarity::EPIC } },
+	{ 246, { "Quickdraw Holster", item_rarity::EPIC } },
+	{ 247, { "Shatter Caps", item_rarity::EPIC }},
+	{ 248, { "Kinetic Feeder", item_rarity::EPIC } },
+	{ 249, { "Boosted Loader", item_rarity::LEGENDARY }},
+	{ 245, { "Mobile Respawn Beacon", item_rarity::RARE }},
+	{ 246, { "Vault Key", item_rarity::HEIRLOOM }},
+	{ 248, { "Treasure Pack", item_rarity::HEIRLOOM }},
+	{ 249, { "Survival Doubler", item_rarity::HEIRLOOM }},
+	{ 250, { "Survival Quadrupler", item_rarity::HEIRLOOM }},
+	{ 251, { "Heat Shield", item_rarity::RARE }},
+	{ 252, { "Mobile Respawn Beacon 2", item_rarity::RARE }},
+	{ 253, { "Treasure Pack", item_rarity::HEIRLOOM }},
+	{ 254, { "Vault Key", item_rarity::HEIRLOOM }},
+	{ 256, { "Knife", item_rarity::HEIRLOOM }},
+	{ 397, { "Patrol Kit", item_rarity::LEGENDARY }},
+	{ 345, { "Evac Tower", item_rarity::RARE } },
+	{ 220, { "Ultimate Accelerant", item_rarity::EPIC } },
+	{ 393, { "Increased Power", item_rarity::EPIC } },
+	{ 392, { "Excess Care", item_rarity::EPIC } },
+	{ 391, { "Inexhaustible Batteries", item_rarity::EPIC } },
+	{ 394, { "Mega-Armor", item_rarity::EPIC } },
+	{ 390, { "Infinite Ammo", item_rarity::EPIC } }
+};
+im thinking of implementing loot esp soon, how did u do it if you dont mind sharing i want to get started
+__________________
+
+───────────────
+
+OXYGENmase
+
+reverse engineering • windows internals • tooling
+
+───────────────
+OXYGENmase is offline
+Last Active: Today
+
+Add to OXYGENmase's Reputation Take from OXYGENmase's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 17th March 2026, 07:34 AM	  #1235
+CowNow
+Hacker Supreme
+
+
+CowNow's Avatar
+
+Join Date: Nov 2023
+Location: China
+Posts: 248
+Reputation: 2090
+Rep Power: 79
+CowNow is a legend in the cheating communityCowNow is a legend in the cheating communityCowNow is a legend in the cheating communityCowNow is a legend in the cheating communityCowNow is a legend in the cheating communityCowNow is a legend in the cheating communityCowNow is a legend in the cheating communityCowNow is a legend in the cheating communityCowNow is a legend in the cheating communityCowNow is a legend in the cheating communityCowNow is a legend in the cheating community
+Points: 10,183, Level: 12
+Points: 10,183, Level: 12	Points: 10,183, Level: 12	Points: 10,183, Level: 12
+Level up: 32%, 817 Points needed
+Level up: 32%	Level up: 32%	Level up: 32%
+Activity: 36.7%
+Activity: 36.7%	Activity: 36.7%	Activity: 36.7%
+Last Achievements
+Apex Reversal, Structs and OffsetsApex Reversal, Structs and Offsets
+Seems not work 
+Code:
+namespace OFF
+{
+    u64 EntityList = 0x644C0F8;
+    u64 ObserverList = 0x644F158;
+    u64 ObserverArray = 0x964;
+    u64 NameIndex = 0x38;
+}
+ 
+bool isSpectating(u64 EntityPtr)
+{
+    u64 ObserverList = Read<u64>(BaseAddr + OFF::ObserverList);
+    int DataTable = Read<int>(EntityPtr + OFF::NameIndex);
+    int Index = Read<int>(ObserverList + DataTable << 3 + OFF::ObserverArray);
+    u64 ObserverPtr = Read<u64>(BaseAddr + OFF::EntityList + (Index & 0xFFFF) << 5)
+    if (ObserverPtr == Global::LocalPlayer)
+        return true;
+    return false;
+}
+Quote:
+Originally Posted by killogram View Post
+abut this i have the right offsets ?
+
+Code:
+    constexpr auto viewAngles = 0x2614; // m_ammoPoolCapacity - 0x14
+    constexpr auto breathAngles = viewAngles - 0x10;
+    constexpr auto punchAngles = 0x2518; //m_currentFrameLocalPlayer.m_vecPunchWeapon_Angle
+    constexpr auto yaw = 0x231c - 0x8; //m_currentFramePlayer.m_ammoPoolCount - 0x8
+    constexpr auto projectileSpeed = 0x1ae0 + 0xd80;
+    constexpr auto projectileScale = 0x1ae0 + 0xd88;
+view angle is 0x2600
+CowNow is offline
+Last Active: 22nd November 2026
+
+Add to CowNow's Reputation Take from CowNow's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 17th March 2026, 08:12 AM	  #1236
+monikabhabhi
+n00bie
+
+
+monikabhabhi's Avatar
+
+Join Date: Aug 2025
+Posts: 16
+Reputation: 10
+Rep Power: 32
+monikabhabhi has made posts that are generally average in quality
+Points: 546, Level: 1
+Points: 546, Level: 1	Points: 546, Level: 1	Points: 546, Level: 1
+Level up: 30%, 354 Points needed
+Level up: 30%	Level up: 30%	Level up: 30%
+Activity: 11.4%
+Activity: 11.4%	Activity: 11.4%	Activity: 11.4%
+@Cenky uploaded his unheard apex source on 27th feb , but he didnt used offset names, 0x1000 seems to be OFFSET_STUDIO_HDR offset but variable name is model and also idk what offset name 0x8 is , hitboxCache too ? if someone know please tell
+
+Code:
+		uintptr_t model = driver::Read<uintptr_t>(entity + OFFSET_STUDIO_HDR);
+		if (!model) return false;
+ 
+		uintptr_t hdr = driver::Read<uintptr_t>(model + 0x8);
+		if (!hdr) return false;
+ 
+		uint16_t hitboxCache = driver::Read<uint16_t>(hdr + 0x34);
+Last edited by monikabhabhi; 17th March 2026 at 08:22 AM.
+monikabhabhi is offline
+Last Active: 16th August 2026
+
+Add to monikabhabhi's Reputation Take from monikabhabhi's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 17th March 2026, 01:37 PM	  #1237
+0zero00
+Senior Member
+
+
+0zero00's Avatar
+
+Join Date: Sep 2024
+Posts: 86
+Reputation: 10
+Rep Power: 54
+0zero00 has made posts that are generally average in quality
+Points: 1,736, Level: 3
+Points: 1,736, Level: 3	Points: 1,736, Level: 3	Points: 1,736, Level: 3
+Level up: 48%, 364 Points needed
+Level up: 48%	Level up: 48%	Level up: 48%
+Activity: 5.6%
+Activity: 5.6%	Activity: 5.6%	Activity: 5.6%
+Last Achievements
+Apex Reversal, Structs and Offsets
+anyone got any good movement code or fueaters please share if u do im kind of looking for multidirecotnal superglide and neo strafe got normal superglide wroking but really need neostrafe
+0zero00 is offline
+Last Active: Today
+
+Add to 0zero00's Reputation Take from 0zero00's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 17th March 2026, 06:07 PM	  #1238
+qwerttyyu
+Junior Member
+
+
+qwerttyyu's Avatar
+
+Join Date: Jan 2026
+Posts: 47
+Reputation: -105
+Rep Power: 0
+qwerttyyu is an outcastqwerttyyu is an outcast
+Points: 396, Level: 1
+Points: 396, Level: 1	Points: 396, Level: 1	Points: 396, Level: 1
+Level up: 99%, 4 Points needed
+Level up: 99%	Level up: 99%	Level up: 99%
+Activity: 6.3%
+Activity: 6.3%	Activity: 6.3%	Activity: 6.3%
+I can use makcu for mouse movement, but what should be used for keyboard input? Is sendinput still effective? SG TS automatic armor switching requires keyboard input, and there's another problem: ESP can't keep up with the enemy if my own perspective changes.
+
+Quote:
+Originally Posted by 0zero00 View Post
+anyone got any good movement code or fueaters please share if u do im kind of looking for multidirecotnal superglide and neo strafe got normal superglide wroking but really need neostrafe
+What do you use to simulate key input? For mouse input, you can use hardware like makcu.
+
+Quote:
+Originally Posted by SMTXXX View Post
+I can most definitely confirm that these do work as of today.
+
+Code:
+Miscellaneous
+Entity List: 0x644d138
+Local Player: 0x282d298
+View Matrix: 0x11a350
+View Render: 0x76236A0
+ 
+Player Core and Location
+Team Number: 0x334
+Local Origin: 0x17c
+Signifier Name: 0x470
+View Models: 0x2e00
+ 
+Player Health, Armor, and Status
+Health: 0x324
+Shield Health: 0x1a0
+Armor Type: 0x464
+Life State: 0x690
+ 
+Glow and Highlights
+Highlight Settings: 0x6b96e40
+Highlight Function Bits: 0x310
+Highlight Server Context ID: 0x320
+https://i.imgur.com/xNs7LD4.jpeg
+
+
+
+I can most definitely confirm that these do work as of today.
+
+Code:
+Miscellaneous
+Entity List: 0x644d138
+Local Player: 0x282d298
+View Matrix: 0x11a350
+View Render: 0x76236A0
+ 
+Player Core and Location
+Team Number: 0x334
+Local Origin: 0x17c
+Signifier Name: 0x470
+View Models: 0x2e00
+ 
+Player Health, Armor, and Status
+Health: 0x324
+Shield Health: 0x1a0
+Armor Type: 0x464
+Life State: 0x690
+ 
+Glow and Highlights
+Highlight Settings: 0x6b96e40
+Highlight Function Bits: 0x310
+Highlight Server Context ID: 0x320
+https://i.imgur.com/xNs7LD4.jpeg
+
+functionBits.functionBits[0] = 2;
+functionBits.functionBits[1] = 125;
+functionBits.functionBits[2] = 64;
+functionBits.functionBits[3] = 64; // 渲染方式相同
+
+
+Thank you, I have already achieved the glow, but which parameter controls the highlight? I don't need highlights.
+qwerttyyu is offline
+Last Active: 15th April 2026
+
+Add to qwerttyyu's Reputation Take from qwerttyyu's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 19th March 2026, 02:05 AM	  #1239
+qingchan
+Senior Member
+
+
+qingchan's Avatar
+
+Join Date: Aug 2022
+Posts: 85
+Reputation: 8
+Rep Power: 0
+qingchan has a near-average in quality posting ability
+Points: 3,142, Level: 5
+Points: 3,142, Level: 5	Points: 3,142, Level: 5	Points: 3,142, Level: 5
+Level up: 43%, 458 Points needed
+Level up: 43%	Level up: 43%	Level up: 43%
+Activity: 6.7%
+Activity: 6.7%	Activity: 6.7%	Activity: 6.7%
+Last Achievements
+Apex Reversal, Structs and OffsetsApex Reversal, Structs and OffsetsApex Reversal, Structs and Offsets
+Quote:
+Originally Posted by Gerosity View Post
+my guess is that this still works, don't see why it wouldn't
+Code:
+uintptr_t WeaponHandle = Memory::Read<uintptr_t>(Globals::LocalPlayer.BasePointer + Offsets::DT_Player::m_latestPrimaryWeapons);
+uintptr_t WeaponHandleMasked = WeaponHandle & 0xffff;
+Globals::LocalPlayer.WeaponEntity = Memory::Read<uintptr_t>(Memory::Base + Offsets::Miscellaneous::cl_entitylist + (WeaponHandleMasked << 5));
+Globals::LocalPlayer.WeaponIndex = Memory::Read<int>(Globals::LocalPlayer.WeaponEntity + Offsets::DT_WeaponX::m_weaponNameIndex);
+What is the offset?
+qingchan is offline
+Last Active: 20th November 2026
+
+Add to qingchan's Reputation Take from qingchan's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 19th March 2026, 10:34 AM	  #1240
+Gerosity
+Lover of "cars"
+
+Gerosity's Avatar
+
+Join Date: Sep 2020
+Location: britain
+Posts: 1,991
+Reputation: 17707
+Rep Power: 187
+Gerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UCGerosity Will always be a legend at UC
+Recognitions
+Award symbolizing a retired staff member who dedicated a notable amount of time and effort to their past staff position. Former Staff
+Points: 62,790, Level: 37
+Points: 62,790, Level: 37	Points: 62,790, Level: 37	Points: 62,790, Level: 37
+Level up: 11%, 3,410 Points needed
+Level up: 11%	Level up: 11%	Level up: 11%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+Last Achievements
+Apex Reversal, Structs and OffsetsApex Reversal, Structs and OffsetsApex Reversal, Structs and Offsets
+Quote:
+Originally Posted by qingchan View Post
+What is the offset?
+idk, find the latest offset dump and search for them (the names are there)
+from this post: https://www.unknowncheats.me/forum/4...-post1121.html, maybe some of the category names are outdated but here's what I could find:
+Code:
+m_latestPrimaryWeapons = 0x19c4
+EntityList = 0x644d138
+m_weaponNameIndex = 0x15f0
+__________________
+cats r awesome sauce
+
+Past Projects: zap-client [Legitbot, Ragebot, Glow, ESP & More] - Patience - An External Linux Cheat [Overlay/CLI]
+Useful Pages: Site Rules - FAQ
+Currently Listening To: Liar, puppy - Violet Chambers
+Gerosity is offline
+Last Active: 23rd November 2026
+
+Add to Gerosity's Reputation Take from Gerosity's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook	
+Page 62 of 135	« First	<	12	52	58	59	60	61	62	63	64	65	66	72	112	>	Last »	
+
+ collapse quick replyQuick Reply
+Message:
+Remove Text Formatting
+	
+Bold
+Italic
+Underline
+	
+
+	
+	
+Insert Link
+Insert Image
+	
+Wrap [QUOTE] tags around selected text
+	
+Wrap [CODE] tags around selected text
+ 	
+Decrease Size
+Increase Size
+
+
+Options
+Quote message in reply?
+ 
+Currently Active Users Viewing This Thread: 14 (11 members and 3 guests)
+myx0146, js2721788677, werrcaj1, wunderman, Requikz, mweqg1, laodaowulitou, arckdayoo, 9 1 1, vicky245
+
+Tags
+apex, offsets, [coding], enjoy, deleted, memory, thread, created, sdk, game
+
+« Previous Thread | Next Thread »
+
+Forum Jump
+
+    Apex Legends
+
+Log Out myx0146
+
+All times are GMT -8. The time now is 10:46 PM.
+Copyright ©2000-2026, Unknowncheats™
+DMCA - View Staff
+Terms of Use - Privacy Policy - Forum Rules

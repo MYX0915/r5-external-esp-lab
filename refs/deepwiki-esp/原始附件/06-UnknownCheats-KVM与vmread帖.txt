@@ -1,0 +1,720 @@
+
+UnknownCheats - Leading the game hacking and cheat development scene since 2000	
+UnKnoWnCheaTs Game Hacking Portal	UnKnoWnCheaTs Game Hacking Forum – Cheats, Hacks, and Tutorials	Download Game Hacks, Cheats and Hacking Tools – UnKnoWnCheaTs	Donate to Support UnKnoWnCheaTs Game Hacking Community	User Settings and Preferences – UnKnoWnCheaTs Control Panel	Quick Access to Game Hacking Forums and Tools	Search UnKnoWnCheaTs	Join the UnKnoWnCheaTs Discord and IRC for Game Hacking Chat	Game Hacking Wiki – Tutorials and Guides on UnKnoWnCheaTs	Toggle Dark Mode
+
+Go Back	 	UnKnoWnCheaTs - Multiplayer Game Hacking and Cheats
+First-Person Shooters
+Apex Legends
+Reload this Page [Source] [KVM - vmread] Apex ESP and Aimbot
+Advanced Forum Search
+New Posts | New Threads
+New Posts: Last Login
+Mark All Forums Read
+Total Posts: 4
+Threads Started: 1
+Reputation: 10
+Last Login: Yesterday at 11:46 PM
+Private Messages: Unread 0, Total 0 (0% full)
+UnKnoWnCheaTs Community Rules
+
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook	
+Page 1 of 154	1	2	3	4	5	11	51	101	>	Last »	
+ 
+Thread Tools 	Search this Thread 	Rating: Thread Rating: 13 votes, 4.92 average. 
+[KVM - vmread] Apex ESP and Aimbot
+Old 10th July 2020, 06:01 AM	  #1
+MisterY
+Member
+
+
+MisterY's Avatar
+
+Join Date: Aug 2013
+Posts: 64
+Reputation: 6185
+Rep Power: 331
+MisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATS
+Points: 38,814, Level: 30
+Points: 38,814, Level: 30	Points: 38,814, Level: 30	Points: 38,814, Level: 30
+Level up: 1%, 2,986 Points needed
+Level up: 1%	Level up: 1%	Level up: 1%
+Activity: 5.6%
+Activity: 5.6%	Activity: 5.6%	Activity: 5.6%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+[KVM - vmread] Apex ESP and Aimbot
+This is an an edited version of "Apex Simple KVM DMA Aimbot+Glow", you need a QEMU KVM with GPU passthrough to use this. Credits to TheCruZ for the base hack and the overlay, h33p for vmread and Y33Tcoder for his initial port. I added aim prediction, no sway and other minor things.
+There are two main sources in the zip: apex_dma is for the host program that performs the memory operations, apex_guest contains the source for the guest client application that manages the hotkeys and draws on the overlay. You can choose to use the NVIDIA overlay or a custom one by setting the variable "use_nvidia" (apex_guest also contains the source of a simple overlay). If everything works you should see the title and the options written in red in the top-left corner of the screen. The overlay should appear without pressing ALT+Z. The screen resolution is hardcoded to 1920x1080 in the apex_dma source so you have to change it if you are using a different one.
+I think that you have to edit the guest source a bit before compiling in order to change the signature of the compiled program. Edit strings, add some (useless) functions between the code, change the program destination name, change the compiler optimization settings or use an obfuscator with virtualization like VMProtect.
+From the guest you can use ssh to control the host and start the apex_dma program. While you are in game you don't need a second keyboard/mouse to activate the features, everything is managed by a "communication" between the host and the guest client program.
+I tested this with Ubuntu 20.04 as host and Windows 10 1903 as guest.
+
+Tutorial (memflow):
+1 - (On host) Compile the source by running the script "build.sh". You need to have Rust installed and updated.
+2 - (On guest) Compile the project apex_guest.
+3 - Open the guest overlay application (you can skip this step if you are using the NVIDIA overlay)
+4 - Open the guest client application
+5 - Run Apex
+6 - (On host) Move inside the directory apex_dma/build and run apex_dma as root.
+
+Tutorial (vmread):
+1 - (On host) Compile the source by running the script "build.sh". You need to have meson installed.
+2 - (On guest) Compile the project apex_guest.
+3 - Open the guest overlay application (you can skip this step if you are using the NVIDIA overlay)
+4 - Open the guest client application
+5 - Run Apex
+6 - (On host) Move inside the directory apex_dma/build and run apex_dma as root.
+
+Now you should see "Ready" on the host terminal and on the guest client application.
+
+
+Hotkeys:
+F4 - Close the client and the overlay
+F5 - Toggle ESP
+F6 - Toggle Aimbot
+F7 - Change "safe" level. If the title is red, everything works without checks on the spectators count. If it is orange, everything is disabled only if you have enemy spectators. If it is green, everything is disabled if you have enemy or allied spectators.
+LEFT/RIGHT arrows - Decrease/Increase max distance for ESP/Aimbot (200 meters default, 100 min, 800 max).
+
+Notes:
+The (0 - 0) next to the title is the spectators count (enemy - allied). The bars around the players are the indicators of health and shield. The number next to the distance is the team id of the player. If the distance from the enemy is written in red instead of green, it means that the player is knocked. The aimbot doesn't aim at knocked players. Currently there is almost no smooth with aimbot, you can increase the value but with more smooth you have less prediction accuracy. The host program exits if you close Apex and the guest client application. Game version 3.0.4.2577.
+
+Download 1.0:
+https://www.unknowncheats.me/forum/d...=file&id=30300
+
+Update 1.1:
+- Added player visibility check (thanks to SenatorII). If the esp box is white then the player isn't visible. To enable the visibility check for the aimbot you have to press F6 again and you should see "F6: AIM (V)".
+https://www.unknowncheats.me/forum/d...=file&id=30534
+
+Update 1.2:
+- Added item glow (F8 to activate)
+
+Update 1.3:
+- Added an interactive menu made with Dear ImGui
+You can still use the hotkeys from 1.2 version to activate the features.
+Press INS to toggle the menu. When the menu is hidden, an indicator in the top-left corner which indicates "enemy - allied" spectators will be shown. The bar above the number of spectators indicates the "safe level", like the title colour in the old versions.
+
+
+Update 1.4:
+- Added player name on ESP
+- Added string encryption on the guest application
+
+Update 1.6:
+- Replaced vmread with memflow
+
+Update 1.7:
+- Replaced DirectX 9 with DirectX 11
+- Removed spectators counter since it wasn't working anymore
+
+Update 1.8:
+- Added infinite charge rifle hack (hold shoot key while using the charge rifle)
+Thanks to: Airstuck / ChargeRifle Hack / Infinite ChargeRifle
+
+Common problems (vmread):
+- LeakSanitizer: detected memory leaks:
+Remove the argument '-fsanitize=address' and '-lasan' in the file meson.build. It is a temporary solution until a proper fix is found.
+
+- Cannot find -lX11:
+Install the libx11 library ("sudo apt install libx11-dev" on Ubuntu/Debian).
+
+- Initialization error: 8:
+vmread can't get the Windows NT version/build. Try to install Windows 10 1903 or 1909.
+Last edited by rhaym; 31st May 2026 at 01:14 PM.
+MisterY is offline
+Last Active: 24th November 2026
+
+Add to MisterY's Reputation Take from MisterY's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 10th July 2020, 10:41 AM	  #2
+dogfabs
+Junior Member
+
+
+dogfabs's Avatar
+
+Join Date: Jun 2020
+Posts: 44
+Reputation: 190
+Rep Power: 157
+dogfabs is looking at C++ For dummiesdogfabs is looking at C++ For dummies
+Points: 3,778, Level: 6
+Points: 3,778, Level: 6	Points: 3,778, Level: 6	Points: 3,778, Level: 6
+Level up: 20%, 722 Points needed
+Level up: 20%	Level up: 20%	Level up: 20%
+Activity: 5.6%
+Activity: 5.6%	Activity: 5.6%	Activity: 5.6%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+thanks! waiting to be approved..
+dogfabs is offline
+Last Active: 7th October 2026
+
+Add to dogfabs's Reputation Take from dogfabs's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 10th July 2020, 03:23 PM	  #3
+lukizel
+Don Poldon
+
+lukizel's Avatar
+
+Join Date: Oct 2016
+Location: Poland
+Posts: 145
+Reputation: 2288
+Rep Power: 250
+lukizel is a legend in the cheating communitylukizel is a legend in the cheating communitylukizel is a legend in the cheating communitylukizel is a legend in the cheating communitylukizel is a legend in the cheating communitylukizel is a legend in the cheating communitylukizel is a legend in the cheating communitylukizel is a legend in the cheating communitylukizel is a legend in the cheating communitylukizel is a legend in the cheating communitylukizel is a legend in the cheating community
+Points: 8,520, Level: 10
+Points: 8,520, Level: 10	Points: 8,520, Level: 10	Points: 8,520, Level: 10
+Level up: 84%, 180 Points needed
+Level up: 84%	Level up: 84%	Level up: 84%
+Activity: 2.1%
+Activity: 2.1%	Activity: 2.1%	Activity: 2.1%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+cool to see this section being blown up with some new stuff even if it's stuff like this. waiting for approval
+__________________
+
+Trying to help people with CS and GTA, usually failing miserably 
+lukizel is offline
+Last Active: 15th November 2026
+
+Add to lukizel's Reputation Take from lukizel's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 11th July 2020, 07:08 PM	  #4
+albatror
+1337 H4x0!2
+
+
+albatror's Avatar
+
+Join Date: Nov 2009
+Posts: 133
+Reputation: 3523
+Rep Power: 419
+albatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating community
+Points: 16,359, Level: 16
+Points: 16,359, Level: 16	Points: 16,359, Level: 16	Points: 16,359, Level: 16
+Level up: 98%, 41 Points needed
+Level up: 98%	Level up: 98%	Level up: 98%
+Activity: 4.4%
+Activity: 4.4%	Activity: 4.4%	Activity: 4.4%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+thks a lot, waiting ...  ... to be approved..
+albatror is offline
+Last Active: Today
+
+Add to albatror's Reputation Take from albatror's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th July 2020, 06:59 AM	  #5
+qazz
+1337 H4x0!2
+
+qazz's Avatar
+
+Join Date: Jan 2007
+Posts: 279
+Reputation: 5704
+Rep Power: 490
+qazz DEFINES UNKNOWNCHEATSqazz DEFINES UNKNOWNCHEATSqazz DEFINES UNKNOWNCHEATSqazz DEFINES UNKNOWNCHEATSqazz DEFINES UNKNOWNCHEATSqazz DEFINES UNKNOWNCHEATSqazz DEFINES UNKNOWNCHEATSqazz DEFINES UNKNOWNCHEATSqazz DEFINES UNKNOWNCHEATSqazz DEFINES UNKNOWNCHEATSqazz DEFINES UNKNOWNCHEATS
+Recognitions
+Members who have contributed financial support towards UnKnoWnCheaTs. Donator (2)
+Points: 19,297, Level: 18
+Points: 19,297, Level: 18	Points: 19,297, Level: 18	Points: 19,297, Level: 18
+Level up: 99%, 3 Points needed
+Level up: 99%	Level up: 99%	Level up: 99%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+
+Can you get unbanned using QEMU VM? I am almost sure it's a MOBO+SSD/HDD ban from EAC .
+__________________
+
+qazz is offline
+Last Active: 19th November 2026
+
+Add to qazz's Reputation Take from qazz's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th July 2020, 07:39 AM	  #6
+ciceron
+Hacked the universe
+
+ciceron's Avatar
+
+Join Date: Dec 2010
+Posts: 3,110
+Reputation: 45141
+Rep Power: 464
+ciceron has a huge epeen!ciceron has a huge epeen!ciceron has a huge epeen!ciceron has a huge epeen!ciceron has a huge epeen!ciceron has a huge epeen!ciceron has a huge epeen!ciceron has a huge epeen!ciceron has a huge epeen!ciceron has a huge epeen!ciceron has a huge epeen!
+Recognitions
+Award symbolizing a retired staff member who dedicated a notable amount of time and effort to their past staff position. Former Staff
+Points: 148,607, Level: 55
+Points: 148,607, Level: 55	Points: 148,607, Level: 55	Points: 148,607, Level: 55
+Level up: 8%, 5,393 Points needed
+Level up: 8%	Level up: 8%	Level up: 8%
+Activity: 57.1%
+Activity: 57.1%	Activity: 57.1%	Activity: 57.1%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+Approved, sources only.
+
+File Approved
+[KVM - vmread] Apex ESP and Aimbot
+SHA256: 0F73C86A57AD0AC02DEF6A3904BF467A0291EC3C2A2A52FC9A41E70B9C01B6A2 - apex_dma_kvm_[unknowncheats.me]_.zip
+Interested in how we analyze files? Click here to find out.
+ciceron is offline
+Last Active: 8th October 2024
+
+Add to ciceron's Reputation Take from ciceron's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th July 2020, 08:45 AM	  #7
+picco911
+Junior Member
+
+
+picco911's Avatar
+
+Join Date: Aug 2017
+Posts: 48
+Reputation: 130
+Rep Power: 227
+picco911 is in the shadow of all hacking legendspicco911 is in the shadow of all hacking legends
+Points: 4,991, Level: 7
+Points: 4,991, Level: 7	Points: 4,991, Level: 7	Points: 4,991, Level: 7
+Level up: 55%, 409 Points needed
+Level up: 55%	Level up: 55%	Level up: 55%
+Activity: 2.5%
+Activity: 2.5%	Activity: 2.5%	Activity: 2.5%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+Quote:
+Originally Posted by qazz View Post
+Can you get unbanned using QEMU VM? I am almost sure it's a MOBO+SSD/HDD ban from EAC .
+of course
+picco911 is offline
+Last Active: 22nd September 2024
+
+Add to picco911's Reputation Take from picco911's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th July 2020, 08:50 AM	  #8
+TorjanHorse
+1337 H4x0!2
+
+
+TorjanHorse's Avatar
+
+Join Date: Aug 2019
+Posts: 121
+Reputation: -187
+Rep Power: 0
+TorjanHorse is nearly a complete Unknown AsshatTorjanHorse is nearly a complete Unknown Asshat
+Points: 4,500, Level: 6
+Points: 4,500, Level: 6	Points: 4,500, Level: 6	Points: 4,500, Level: 6
+Level up: 50%, 900 Points needed
+Level up: 50%	Level up: 50%	Level up: 50%
+Activity: 3.6%
+Activity: 3.6%	Activity: 3.6%	Activity: 3.6%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+any one have tutorial video i am confuse little bit
+TorjanHorse is offline
+Last Active: Yesterday
+
+Add to TorjanHorse's Reputation Take from TorjanHorse's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th July 2020, 08:55 AM	  #9
+666s4t4n666
+n00bie
+
+
+666s4t4n666's Avatar
+
+Join Date: Feb 2019
+Posts: 16
+Reputation: 10
+Rep Power: 190
+666s4t4n666 has made posts that are generally average in quality
+Points: 1,489, Level: 3
+Points: 1,489, Level: 3	Points: 1,489, Level: 3	Points: 1,489, Level: 3
+Level up: 13%, 611 Points needed
+Level up: 13%	Level up: 13%	Level up: 13%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot
+Will this work if my host is windows 10?
+666s4t4n666 is offline
+Last Active: 29th January 2024
+
+Add to 666s4t4n666's Reputation Take from 666s4t4n666's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th July 2020, 09:48 AM	  #10
+MisterY
+Member
+
+
+MisterY's Avatar
+
+Threadstarter
+Join Date: Aug 2013
+Posts: 64
+Reputation: 6185
+Rep Power: 331
+MisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATS
+Points: 38,814, Level: 30
+Points: 38,814, Level: 30	Points: 38,814, Level: 30	Points: 38,814, Level: 30
+Level up: 1%, 2,986 Points needed
+Level up: 1%	Level up: 1%	Level up: 1%
+Activity: 5.6%
+Activity: 5.6%	Activity: 5.6%	Activity: 5.6%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+Quote:
+Originally Posted by 666s4t4n666 View Post
+Will this work if my host is windows 10?
+No, Linux is required as host.
+MisterY is offline
+Last Active: 24th November 2026
+
+Add to MisterY's Reputation Take from MisterY's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th July 2020, 10:40 AM	  #11
+albatror
+1337 H4x0!2
+
+
+albatror's Avatar
+
+Join Date: Nov 2009
+Posts: 133
+Reputation: 3523
+Rep Power: 419
+albatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating communityalbatror is a legend in the cheating community
+Points: 16,359, Level: 16
+Points: 16,359, Level: 16	Points: 16,359, Level: 16	Points: 16,359, Level: 16
+Level up: 98%, 41 Points needed
+Level up: 98%	Level up: 98%	Level up: 98%
+Activity: 4.4%
+Activity: 4.4%	Activity: 4.4%	Activity: 4.4%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+getting
+Code:
+Starting client context...
+Mem:    2008fff7000     | Size: dfff0001000
+Initialization error: 3
+when try to start on host (dont had this error with "Apex Simple KVM DMA Aimbot+Glow").
+
+Any tips ? Anyway thks.
+albatror is offline
+Last Active: Today
+
+Add to albatror's Reputation Take from albatror's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 12th July 2020, 09:49 PM	  #12
+dogfabs
+Junior Member
+
+
+dogfabs's Avatar
+
+Join Date: Jun 2020
+Posts: 44
+Reputation: 190
+Rep Power: 157
+dogfabs is looking at C++ For dummiesdogfabs is looking at C++ For dummies
+Points: 3,778, Level: 6
+Points: 3,778, Level: 6	Points: 3,778, Level: 6	Points: 3,778, Level: 6
+Level up: 20%, 722 Points needed
+Level up: 20%	Level up: 20%	Level up: 20%
+Activity: 5.6%
+Activity: 5.6%	Activity: 5.6%	Activity: 5.6%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+when i try to running the script "build.sh" this happen... bash: ./build.sh: /bin/bash^M: bad interpreter : no such file or directory how to fix?
+dogfabs is offline
+Last Active: 7th October 2026
+
+Add to dogfabs's Reputation Take from dogfabs's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 13th July 2020, 12:57 AM	  #13
+picco911
+Junior Member
+
+
+picco911's Avatar
+
+Join Date: Aug 2017
+Posts: 48
+Reputation: 130
+Rep Power: 227
+picco911 is in the shadow of all hacking legendspicco911 is in the shadow of all hacking legends
+Points: 4,991, Level: 7
+Points: 4,991, Level: 7	Points: 4,991, Level: 7	Points: 4,991, Level: 7
+Level up: 55%, 409 Points needed
+Level up: 55%	Level up: 55%	Level up: 55%
+Activity: 2.5%
+Activity: 2.5%	Activity: 2.5%	Activity: 2.5%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+Quote:
+Originally Posted by dogfabs View Post
+when i try to running the script "build.sh" this happen... bash: ./build.sh: /bin/bash^M: bad interpreter : no such file or directory how to fix?
+Open script and do it manualy.
+picco911 is offline
+Last Active: 22nd September 2024
+
+Add to picco911's Reputation Take from picco911's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 13th July 2020, 01:02 AM	  #14
+MisterY
+Member
+
+
+MisterY's Avatar
+
+Threadstarter
+Join Date: Aug 2013
+Posts: 64
+Reputation: 6185
+Rep Power: 331
+MisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATS
+Points: 38,814, Level: 30
+Points: 38,814, Level: 30	Points: 38,814, Level: 30	Points: 38,814, Level: 30
+Level up: 1%, 2,986 Points needed
+Level up: 1%	Level up: 1%	Level up: 1%
+Activity: 5.6%
+Activity: 5.6%	Activity: 5.6%	Activity: 5.6%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+Quote:
+Originally Posted by albatror View Post
+getting
+Code:
+Starting client context...
+Mem:    2008fff7000     | Size: dfff0001000
+Initialization error: 3
+when try to start on host (dont had this error with "Apex Simple KVM DMA Aimbot+Glow").
+
+Any tips ? Anyway thks.
+I used the updated version of vmread for this project, however the function that fails (CheckLow in wintools.c) isn't changed so I don't know why it doesn't work. You can try to use the outdated version of vmread but you have to keep the current hlapi.h because I made some changes.
+
+Quote:
+Originally Posted by dogfabs View Post
+when i try to running the script "build.sh" this happen... bash: ./build.sh: /bin/bash^M: bad interpreter : no such file or directory how to fix?
+Try to replace #!/bin/bash with #!/bin/sh.
+MisterY is offline
+Last Active: 24th November 2026
+
+Add to MisterY's Reputation Take from MisterY's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 13th July 2020, 04:47 AM	  #15
+memek1
+n00bie
+
+
+memek1's Avatar
+
+Join Date: Jan 2018
+Posts: 1
+Reputation: 10
+Rep Power: 217
+memek1 has made posts that are generally average in quality
+tutorial please i so confuse
+memek1 is offline
+Last Active: 17th October 2026
+
+Add to memek1's Reputation Take from memek1's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 13th July 2020, 05:13 AM	  #16
+Fiffenet
+n00bie
+
+
+Fiffenet's Avatar
+
+Join Date: Jan 2018
+Posts: 1
+Reputation: 10
+Rep Power: 217
+Fiffenet has made posts that are generally average in quality
+Points: 2,921, Level: 5
+Points: 2,921, Level: 5	Points: 2,921, Level: 5	Points: 2,921, Level: 5
+Level up: 16%, 679 Points needed
+Level up: 16%	Level up: 16%	Level up: 16%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+How to use this hack? Maybe tutorial video or other help?! )
+Fiffenet is offline
+Last Active: 4th February 2022
+
+Add to Fiffenet's Reputation Take from Fiffenet's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 13th July 2020, 09:36 AM	  #17
+TorjanHorse
+1337 H4x0!2
+
+
+TorjanHorse's Avatar
+
+Join Date: Aug 2019
+Posts: 121
+Reputation: -187
+Rep Power: 0
+TorjanHorse is nearly a complete Unknown AsshatTorjanHorse is nearly a complete Unknown Asshat
+Points: 4,500, Level: 6
+Points: 4,500, Level: 6	Points: 4,500, Level: 6	Points: 4,500, Level: 6
+Level up: 50%, 900 Points needed
+Level up: 50%	Level up: 50%	Level up: 50%
+Activity: 3.6%
+Activity: 3.6%	Activity: 3.6%	Activity: 3.6%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+please post tutorial video no one understands
+TorjanHorse is offline
+Last Active: Yesterday
+
+Add to TorjanHorse's Reputation Take from TorjanHorse's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 14th July 2020, 05:28 AM	  #18
+picco911
+Junior Member
+
+
+picco911's Avatar
+
+Join Date: Aug 2017
+Posts: 48
+Reputation: 130
+Rep Power: 227
+picco911 is in the shadow of all hacking legendspicco911 is in the shadow of all hacking legends
+Points: 4,991, Level: 7
+Points: 4,991, Level: 7	Points: 4,991, Level: 7	Points: 4,991, Level: 7
+Level up: 55%, 409 Points needed
+Level up: 55%	Level up: 55%	Level up: 55%
+Activity: 2.5%
+Activity: 2.5%	Activity: 2.5%	Activity: 2.5%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+One tutorial here
+https://www.youtube.com/watch?v=C2jnUK4MSyE&t=34s
+Then try this https://github.com/Y33Tcoder/EzApexDMAAimbot
+install meson and ninja on your linux host
+run "meson builddir" inside vmread folder
+run "ninja" command in builddir to build example.cpp
+run "./example"
+picco911 is offline
+Last Active: 22nd September 2024
+
+Add to picco911's Reputation Take from picco911's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 15th July 2020, 06:32 AM	  #19
+QuestMajor
+n00bie
+
+
+QuestMajor's Avatar
+
+Join Date: Feb 2018
+Posts: 14
+Reputation: 217
+Rep Power: 215
+QuestMajor has just realized Source Code isnt a magazineQuestMajor has just realized Source Code isnt a magazineQuestMajor has just realized Source Code isnt a magazine
+Points: 2,181, Level: 4
+Points: 2,181, Level: 4	Points: 2,181, Level: 4	Points: 2,181, Level: 4
+Level up: 12%, 619 Points needed
+Level up: 12%	Level up: 12%	Level up: 12%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot
+Can you share your System Specs?
+QuestMajor is offline
+Last Active: 1st September 2020
+
+Add to QuestMajor's Reputation Take from QuestMajor's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 15th July 2020, 07:30 AM	  #20
+MisterY
+Member
+
+
+MisterY's Avatar
+
+Threadstarter
+Join Date: Aug 2013
+Posts: 64
+Reputation: 6185
+Rep Power: 331
+MisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATSMisterY DEFINES UNKNOWNCHEATS
+Points: 38,814, Level: 30
+Points: 38,814, Level: 30	Points: 38,814, Level: 30	Points: 38,814, Level: 30
+Level up: 1%, 2,986 Points needed
+Level up: 1%	Level up: 1%	Level up: 1%
+Activity: 5.6%
+Activity: 5.6%	Activity: 5.6%	Activity: 5.6%
+Last Achievements
+[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot[KVM - vmread] Apex ESP and Aimbot
+Quote:
+Originally Posted by QuestMajor View Post
+Can you share your System Specs?
+i7 6700k, GTX 1070, 16GB of RAM.
+MisterY is offline
+Last Active: 24th November 2026
+
+Add to MisterY's Reputation Take from MisterY's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook	
+Page 1 of 154	1	2	3	4	5	11	51	101	>	Last »	
+
+ collapse quick replyQuick Reply
+Message:
+Remove Text Formatting
+	
+Bold
+Italic
+Underline
+	
+
+	
+	
+Insert Link
+Insert Image
+	
+Wrap [QUOTE] tags around selected text
+	
+Wrap [CODE] tags around selected text
+ 	
+Decrease Size
+Increase Size
+
+
+Options
+Quote message in reply?
+ 
+
+collapse similar threadsSimilar Threads
+Thread	Thread Starter	Forum	Replies	Last Post
+[Source] Apex Simple KVM DMA Aimbot+Glow [Credits to h33p and TheCruz]	Y33Tcoder	Apex Legends	58	30th July 2020 05:47 PM
+[Release] vmread-rs	not-matthias	Rust (Language)	2	13th April 2020 05:32 AM
+
+Currently Active Users Viewing This Thread: 4 (1 members and 3 guests)
+myx0146
+
+Tags
+guest, host, overlay, client, program, source, change, spectators, apex_dma, enemy
+
+« Previous Thread | Next Thread »
+
+Forum Jump
+
+    Apex Legends
+
+Log Out myx0146
+
+All times are GMT -8. The time now is 10:47 PM.
+Copyright ©2000-2026, Unknowncheats™
+DMCA - View Staff
+Terms of Use - Privacy Policy - Forum Rules

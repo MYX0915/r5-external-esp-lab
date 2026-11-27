@@ -6065,3 +6065,160 @@ Get-Content -Path <file> -Encoding UTF8
 
 **ps1 ??? PowerShell 5.1 ????? BOM**???????/?????? GBK ???????????
 `start-all.ps1` ??????????? UTF-8 with BOM?
+
+
+---
+
+## 118. 高亮失败的真正原因：只改了 RGB，没改约束字段（2026-11-27 15:01）
+
+### 118.1 资料来源
+
+用户提供的 `DeepWiki-ESP与雷达叠加层-完整原文与中文整理.zip`，
+内含 UC 帖 **《[DX12] Apex Legends Highlight System - Structure Analysis & Glow Activation》**
+（作者 Zedvy，2026-08-13，共 4 楼）。
+
+关键在第 2 楼 **TingCPP** 的回复，给出了权威结构定义和两个枚举。
+
+### 118.2 完整的 HighlightSettings_t（stride 0x34）
+
+```cpp
+struct HighlightSettings_t
+{
+    uint8_t  insideFunction;          // +0x00
+    uint8_t  outsideFunction;         // +0x01
+    uint8_t  outlineRadius;           // +0x02  轮廓宽度
+    uint8_t  state      : 6;          // +0x03  bits0-5
+    uint8_t  shouldDraw : 1;          //        bit6
+    uint8_t  postProcess: 1;          //        bit7
+    Color    color;                   // +0x04  RGB 三个 float
+    Color    color2;                  // +0x10  RGB 三个 float
+    float    nearFadeDist;            // +0x1C
+    float    farFadeDist;             // +0x20
+    uint32_t focusedInside;           // +0x24
+    uint32_t focusedOutside;          // +0x28
+    uint32_t Flags;                   // +0x2C  eHIGHLIGHT_FLAG
+    uint32_t DrawFunc;                // +0x30  eHIGHLIGHT_VIS
+};
+```
+
+### 118.3 两个枚举
+
+```cpp
+enum eHIGHLIGHT_FLAG {
+    HIGHLIGHT_FLAG_ADS_FADE                = (1 << 1),
+    HIGHLIGHT_FLAG_REQUIRE_CAN_PICK_UP_CLIP= (1 << 2),
+    HIGHLIGHT_FLAG_REQUIRE_PILOT           = (1 << 4),
+    HIGHLIGHT_FLAG_REQUIRE_SAME_TEAM       = (1 << 6),
+    HIGHLIGHT_FLAG_REQUIRE_DIFFERENT_TEAM  = (1 << 7),
+    HIGHLIGHT_FLAG_REQUIRE_FRIENDLY_TEAM   = (1 << 8),
+    HIGHLIGHT_FLAG_REQUIRE_ENEMY_TEAM      = (1 << 9),
+    HIGHLIGHT_FLAG_REQUIRE_LOCAL_PLAYER_IS_OWNER = (1 << 10),
+    HIGHLIGHT_FLAG_REQUIRE_LOW_MOVEMENT    = (1 << 11),
+    HIGHLIGHT_FLAG_REQUIRE_HIGH_MOVEMENT   = (1 << 12),
+    HIGHLIGHT_FLAG_CHECK_OFTEN             = (1 << 13),
+    HIGHLIGHT_FLAG_DISABLE_DEATH_FADE      = (1 << 14),
+    HIGHLIGHT_FLAG_TEAM_AGNOSTIC           = (1 << 15),
+    HIGHLIGHT_FLAG_ADDITIONAL_LOS_CHECKS   = (1 << 16),
+};
+
+enum eHIGHLIGHT_VIS {
+    HIGHLIGHT_VIS_NONE   = 0,
+    HIGHLIGHT_VIS_FORCE_ON   = 1,
+    HIGHLIGHT_VIS_ALWAYS     = 2,   // 永远画（穿墙）
+    HIGHLIGHT_VIS_OCCLUDED   = 3,
+    HIGHLIGHT_VIS_FULL_VIEW  = 4,
+    HIGHLIGHT_VIS_LOS        = 5,   // 只画视线内
+    HIGHLIGHT_VIS_LOS_ENTSONLYCONTENTSBLOCK = 6,
+    HIGHLIGHT_VIS_LOS_ENTSONLY_BLOCKSCAN    = 7,
+};
+```
+
+### 118.4 我们之前错在哪
+
+驱动里的 `GlowColorRow` **只写了 3 个 float**：
+
+```c
+MemWrite(proc, entry + 0x04, &r, 4);
+MemWrite(proc, entry + 0x08, &g, 4);
+MemWrite(proc, entry + 0x0C, &b, 4);
+/* 0x10 ~ 0x33 一个字节都没动 */
+```
+
+于是行 50 的其余字段全部保持**游戏原生值**：
+
+| 字段 | 行 50 原生值的后果 |
+|---|---|
+| `farFadeDist` (+0x20) | 超过几百单位就淡出 → **远处玩家不画** |
+| `Flags` (+0x2C) | 可能带 LOS 检查 / 队伍要求 → **墙后、特定队伍不画** |
+| `DrawFunc` (+0x30) | 可能是 LOS 模式 → **只在视线内画** |
+| `color2` (+0x10) | 我们以为是"未确认参数"，其实是第二个颜色 |
+
+**这就是"高亮有时出剪影有时不出"的根因**——颜色改对了，但渲染约束一个都没解除。
+
+### 118.5 修复：整行写入
+
+新增 `GlowSetupRow()`，保留 `functionBits` 的 mode 位、强制 `shouldDraw|postProcess`，
+然后写全部约束字段：
+
+```c
+bits: if (b2 == 0) b2 = 0x40;   /* 半径 0 = 画不出来 */
+      b3 |= 0xC0;               /* shouldDraw | postProcess */
+
+MemWrite(+0x04, color);         /* RGB */
+MemWrite(+0x10, color2);        /* 同色 */
+MemWrite(+0x1C, 0.0f);          /* nearFadeDist */
+MemWrite(+0x20, 200000.0f);     /* farFadeDist —— 相当于不限距离 */
+MemWrite(+0x2C, FLAGS);         /* TEAM_AGNOSTIC | DISABLE_DEATH_FADE */
+MemWrite(+0x30, 2);             /* HIGHLIGHT_VIS_ALWAYS —— 穿墙 */
+```
+
+`AutoGlowAll()` 每 tick 调用的也从"只写 RGB"改成了整行写入。
+
+### 118.6 新增驱动命令
+
+| 命令 | 作用 |
+|---|---|
+| `glowfind` | 扫描 256 行，列出全零行（可安全克隆的空闲行） |
+| `glowdump <row>` | 十六进制 dump 一行 0x34 字节 + 解析各字段 |
+| `glowclone <src> <dst>` | 整行克隆（如 `glowclone 50 200`） |
+| `glowrow <row> [r g b] [flags] [vis]` | 整行写入，默认 flags=0xC000（TEAM_AGNOSTIC\|DISABLE_DEATH_FADE），vis=2（ALWAYS） |
+
+### 118.7 正确用法（不要直接改行 50）
+
+行 50 是游戏自己在用的行，全局改它会影响别的系统。正确流程：
+
+```
+1. glowfind                     → 找空闲行，比如 200
+2. glowclone 50 200             → 把行 50 克隆到 200（继承半径 64 + 绘制位）
+3. glowrow 200 0.22 1.0 0.08    → 整行写入：颜色 + 解除所有约束
+4. glowdump 200                 → 验证：radius=64 shouldDraw=1 pp=1 drawFunc=2
+5. glowauto 1 200 0.22 1.0 0.08 → 对所有实体生效
+```
+
+### 118.8 为什么这能解决"人物模型高亮失败"
+
+之前的表现是"有时能出橙色剪影、有时完全不出"。对照新知识：
+
+```
+训练场假人      → 距离近、无遮挡   → 原生约束不触发 → 能出 ✓
+对局远处玩家    → farFadeDist 淡出 → 不出 ✗
+对局墙后玩家    → LOS 检查         → 不出 ✗
+```
+
+改成 `ALWAYS` + `farFadeDist=200000` + `TEAM_AGNOSTIC` 之后，
+距离、视线、队伍三个维度全部解除。
+
+### 118.9 待验证
+
+```
+[ ] 重启加载新驱动（43 KB，2026-11-27 15:00:47）
+[ ] glowfind / glowdump 确认行 50 的原生字段值
+[ ] 按 118.7 流程配置后，进对局看远处/墙后玩家是否都有剪影
+[ ] 如果仍有问题，用 glowdump 对比出问题的那一行的字段
+```
+
+### 118.10 与本项目旧结论的关系
+
+第 103 节记录的"postProcess=1 的样式行才渲染剪影（row50 可用 / row2 无效）"仍然成立，
+但当时只发现了 `functionBits` 的两个 bit，**没有发现 +0x2C 的 Flags 和 +0x30 的 DrawFunc**。
+本节是那一节的补充，不是推翻。

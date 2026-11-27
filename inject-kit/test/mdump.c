@@ -398,6 +398,14 @@ static U64 g_vtExtra2 = 0;  /* ??? 2???????? (RVA 0x316930) */
 static ULONG g_vtManual = 0; /* vt2 ??????????? */
 /* ---- ??????????????????????? ---- */
 static ULONG g_autoGlow  = 1;    /* ???? */
+/* ---- 整行高亮样式控制（依据 UC DX12 高亮帖） ---- */
+#define GLOW_FLAG_TEAM_AGNOSTIC      0x00008000u
+#define GLOW_FLAG_DISABLE_DEATH_FADE 0x00004000u
+#define GLOW_VIS_ALWAYS              2u
+#define GLOW_DEFAULT_FLAGS  (GLOW_FLAG_TEAM_AGNOSTIC | GLOW_FLAG_DISABLE_DEATH_FADE)
+#define GLOW_DEFAULT_VIS    GLOW_VIS_ALWAYS
+static ULONG g_autoFlags = GLOW_DEFAULT_FLAGS;
+static ULONG g_autoVis   = GLOW_DEFAULT_VIS;
 static ULONG g_autoRow   = 50;   /* ?????????postProcess=1? */
 static U64   g_glowCache[64];
 static ULONG g_glowCacheN = 0;
@@ -603,6 +611,14 @@ static NTSTATUS MemWrite(PEPROCESS proc, U64 va, PVOID src, SIZE_T len);
 static VOID GlowTick(PEPROCESS proc);
 static VOID GlowParity(PEPROCESS proc);
 static VOID GlowColorRow(PEPROCESS proc, U64 globalVa, ULONG row, float r, float g, float b);
+static BOOLEAN PrefixIs(const UCHAR* p, const UCHAR* end, const char* tag);
+static BOOLEAN ParseUOpt(const UCHAR** pp, const UCHAR* end, ULONG* out);
+static BOOLEAN GlowRowAddr(PEPROCESS proc, U64 globalVa, ULONG row, U64* entry);
+static VOID GlowSetupRow(PEPROCESS proc, U64 globalVa, ULONG row,
+                         float r, float g, float b, ULONG flags, ULONG vis);
+static VOID GlowDumpRow(PEPROCESS proc, U64 globalVa, ULONG row);
+static VOID GlowFindFree(PEPROCESS proc, U64 globalVa);
+static VOID GlowCloneRow(PEPROCESS proc, U64 globalVa, ULONG src, ULONG dst);
 static VOID HeapValueScan(PEPROCESS proc, float tx, float ty, float tz, float rad);
 static BOOLEAN ReadEntPos(PEPROCESS proc, U64 inst, float* out);
 static VOID LootScan(PEPROCESS proc, U64 arrVa);
@@ -965,6 +981,39 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                                 KF("[mdump] arrscan start stride=0x%X min=%lu\n", st, mn ? mn : 8);
                                 ArrScan(proc, st, mn ? mn : 8);
                             } else K("[mdump] arrscan: bad args\n");
+                        }
+
+                        else if (PrefixIs(p, le, "glowfind")) {
+                            GlowFindFree(proc, modBaseForNpc + RVA_HIGHLIGHT_GLOBAL);
+                        }
+                        else if (PrefixIs(p, le, "glowdump")) {
+                            const UCHAR* qd = p + 8;
+                            ULONG rw = 0;
+                            if (ParseUOpt(&qd, le, &rw))
+                                GlowDumpRow(proc, modBaseForNpc + RVA_HIGHLIGHT_GLOBAL, rw);
+                            else K("[mdump] glowdump: bad args\n");
+                        }
+                        else if (PrefixIs(p, le, "glowclone")) {
+                            const UCHAR* qq = p + 9;
+                            ULONG a = 0, b2 = 0;
+                            if (ParseUOpt(&qq, le, &a) && ParseUOpt(&qq, le, &b2))
+                                GlowCloneRow(proc, modBaseForNpc + RVA_HIGHLIGHT_GLOBAL, a, b2);
+                            else K("[mdump] glowclone: usage glowclone <src> <dst>\n");
+                        }
+                        else if (PrefixIs(p, le, "glowrow")) {
+                            const UCHAR* qr = p + 7;
+                            ULONG rw = 0, fl = 0, vs = 0;
+                            float cr = 0.22f, cg2 = 1.0f, cb2 = 0.08f;
+                            if (ParseUOpt(&qr, le, &rw)) {
+                                float a1 = ParseF(&qr, le), a2 = ParseF(&qr, le), a3 = ParseF(&qr, le);
+                                if (a1 == a1 && a2 == a2 && a3 == a3 && (a1 + a2 + a3) > 0.0f) {
+                                    cr = a1; cg2 = a2; cb2 = a3;
+                                }
+                                if (!ParseUOpt(&qr, le, &fl)) fl = g_autoFlags;
+                                if (!ParseUOpt(&qr, le, &vs)) vs = g_autoVis;
+                                GlowSetupRow(proc, modBaseForNpc + RVA_HIGHLIGHT_GLOBAL,
+                                             rw, cr, cg2, cb2, fl, vs);
+                            } else K("[mdump] glowrow: usage glowrow <row> [r g b] [flags] [vis]\n");
                         }
                         else if ((p[0] == 'g' || p[0] == 'G') && (p[1] == 'l' || p[1] == 'L') && (p[2] == 'o' || p[2] == 'O') && (p[3] == 'w' || p[3] == 'W') && (p[4] == 'c' || p[4] == 'C')) {
                             const UCHAR* qc = p + 5;
@@ -1637,6 +1686,156 @@ static BOOLEAN TryReattach(void)
 
 /* ??????????????
  * ???????? parity???????????? contexts/focused/fade? */
+
+/* ================= 整行高亮样式（HighlightSettings_t, stride 0x34）=================
+ * 依据 UC [DX12] Highlight System 帖：
+ *   +0x00 uint32 functionBits = {insideFunction, outsideFunction, outlineRadius, state|shouldDraw|postProcess}
+ *   +0x04 Color color  (3 float)
+ *   +0x10 Color color2 (3 float)
+ *   +0x1C float nearFadeDist
+ *   +0x20 float farFadeDist
+ *   +0x24 uint32 focusedInside
+ *   +0x28 uint32 focusedOutside
+ *   +0x2C uint32 Flags          (eHIGHLIGHT_FLAG)
+ *   +0x30 uint32 DrawFunc       (eHIGHLIGHT_VIS)
+ *
+ * 我们原来只改 RGB，Flags/DrawFunc/farFadeDist 全是行 50 的原生值，
+ * 那些值带着视线检查/队伍要求/远距离淡出 —— 这就是高亮"有时出有时不出"的根因。
+ */
+
+static BOOLEAN PrefixIs(const UCHAR* p, const UCHAR* end, const char* tag)
+{
+    while (*tag) {
+        if (p >= end || ((*p | 0x20) != (UCHAR)(*tag | 0x20))) return FALSE;
+        p++; tag++;
+    }
+    return TRUE;
+}
+
+static BOOLEAN ParseUOpt(const UCHAR** pp, const UCHAR* end, ULONG* out)
+{
+    const UCHAR* p = *pp;
+    ULONG v = 0; BOOLEAN seen = FALSE;
+    while (p < end && *p == ' ') p++;
+    while (p < end) {
+        UCHAR c = *p;
+        if (c >= '0' && c <= '9') { v = v * 10 + (ULONG)(c - '0'); seen = TRUE; p++; }
+        else break;
+    }
+    *pp = p;
+    if (seen) *out = v;
+    return seen;
+}
+
+static BOOLEAN GlowRowAddr(PEPROCESS proc, U64 globalVa, ULONG row, U64* entry)
+{
+    U64 tbl = 0;
+    if (!NT_SUCCESS(MemRead(proc, globalVa, &tbl, 8)) || !tbl) return FALSE;
+    *entry = tbl + (U64)row * 0x34ULL;
+    return TRUE;
+}
+
+/* 整行写入：保留 functionBits 的 mode 位，强制 shouldDraw|postProcess，清掉距离/视线限制 */
+static VOID GlowSetupRow(PEPROCESS proc, U64 globalVa, ULONG row,
+                         float r, float g, float b, ULONG flags, ULONG vis)
+{
+    U64 e = 0;
+    ULONG bits = 0;
+    float nf = 0.0f, ff = 200000.0f;
+
+    if (!GlowRowAddr(proc, globalVa, row, &e)) {
+        K("[mdump] glowrow: table ptr null\n");
+        return;
+    }
+    if (!NT_SUCCESS(MemRead(proc, e, &bits, 4))) bits = 0xC040670Fu;   /* 行 50 原生值兜底 */
+    {
+        UCHAR b0 = (UCHAR)(bits & 0xFF);            /* insideFunction  */
+        UCHAR b1 = (UCHAR)((bits >> 8) & 0xFF);     /* outsideFunction */
+        UCHAR b2 = (UCHAR)((bits >> 16) & 0xFF);    /* outlineRadius   */
+        UCHAR b3 = (UCHAR)((bits >> 24) & 0xFF);    /* state|draw|pp   */
+        if (b2 == 0) b2 = 0x40;                     /* 半径 0 = 画不出来 */
+        b3 |= 0xC0;                                 /* shouldDraw | postProcess */
+        bits = (ULONG)b0 | ((ULONG)b1 << 8) | ((ULONG)b2 << 16) | ((ULONG)b3 << 24);
+    }
+    MemWrite(proc, e + 0x00, &bits, 4);
+    MemWrite(proc, e + 0x04, &r, 4);
+    MemWrite(proc, e + 0x08, &g, 4);
+    MemWrite(proc, e + 0x0C, &b, 4);
+    MemWrite(proc, e + 0x10, &r, 4);                /* color2 同色 */
+    MemWrite(proc, e + 0x14, &g, 4);
+    MemWrite(proc, e + 0x18, &b, 4);
+    MemWrite(proc, e + 0x1C, &nf, 4);               /* nearFadeDist = 0  */
+    MemWrite(proc, e + 0x20, &ff, 4);               /* farFadeDist  = 200000 */
+    MemWrite(proc, e + 0x2C, &flags, 4);            /* 去掉队伍/视线要求 */
+    MemWrite(proc, e + 0x30, &vis, 4);              /* DrawFunc = ALWAYS */
+    KF("[mdump] glowrow row=%lu rgb=(%ld,%ld,%ld) flags=0x%X vis=%lu bits=0x%08X entry=0x%llX [x100]\n",
+       row, (long)(r * 100), (long)(g * 100), (long)(b * 100), flags, vis, bits, e);
+}
+
+static VOID GlowDumpRow(PEPROCESS proc, U64 globalVa, ULONG row)
+{
+    U64 e = 0;
+    UCHAR buf[0x34];
+    CHAR line[256];
+    CHAR* w = line;
+    ULONG i;
+    if (!GlowRowAddr(proc, globalVa, row, &e)) { K("[mdump] glowdump: table null\n"); return; }
+    if (!NT_SUCCESS(MemRead(proc, e, buf, 0x34))) { K("[mdump] glowdump: read fail\n"); return; }
+    KF("[mdump] glowdump row=%lu entry=0x%llX\n", row, e);
+    for (i = 0; i < 0x34; i++) {
+        static const CHAR hx[] = "0123456789ABCDEF";
+        *w++ = hx[buf[i] >> 4];
+        *w++ = hx[buf[i] & 0xF];
+        *w++ = (i % 16 == 15) ? '\n' : ' ';
+        if (i % 16 == 15 || i == 0x33) { *w = 0; K(line); w = line; }
+    }
+    {
+        ULONG bits; float rr, gg, bb;
+        ULONG fl, vis;
+        MemRead(proc, e + 0x00, &bits, 4);
+        MemRead(proc, e + 0x04, &rr, 4); MemRead(proc, e + 0x08, &gg, 4); MemRead(proc, e + 0x0C, &bb, 4);
+        MemRead(proc, e + 0x2C, &fl, 4); MemRead(proc, e + 0x30, &vis, 4);
+        KF("[mdump]   functionBits=0x%08X  radius=%lu shouldDraw=%lu pp=%lu\n",
+           bits, (unsigned long)((bits >> 16) & 0xFF), (unsigned long)((bits >> 30) & 1), (unsigned long)((bits >> 31) & 1));
+        KF("[mdump]   color=(%ld,%ld,%ld) flags=0x%X drawFunc=%lu [x100]\n",
+           (long)(rr * 100), (long)(gg * 100), (long)(bb * 100), fl, vis);
+    }
+}
+
+/* 找全零行（可安全克隆） */
+static VOID GlowFindFree(PEPROCESS proc, U64 globalVa)
+{
+    U64 tbl = 0;
+    ULONG row;
+    CHAR line[512];
+    CHAR* w = line;
+    ULONG n = 0;
+    if (!NT_SUCCESS(MemRead(proc, globalVa, &tbl, 8)) || !tbl) { K("[mdump] glowfind: table null\n"); return; }
+    KF("[mdump] glowfind table=0x%llX\n", tbl);
+    for (row = 0; row < 256; row++) {
+        UCHAR buf[0x34]; ULONG i; BOOLEAN zero = TRUE;
+        if (!NT_SUCCESS(MemRead(proc, tbl + (U64)row * 0x34ULL, buf, 0x34))) continue;
+        for (i = 0; i < 0x34; i++) if (buf[i] != 0) { zero = FALSE; break; }
+        if (zero) {
+            w += RtlStringCchPrintfA(w, (size_t)(line + sizeof(line) - w), "%lu ", row);
+            n++;
+            if (n % 20 == 0) { *w = 0; K(line); w = line; }
+        }
+    }
+    if (w != line) { *w = 0; K(line); }
+    KF("[mdump] glowfind zero_rows=%lu\n", n);
+}
+
+static VOID GlowCloneRow(PEPROCESS proc, U64 globalVa, ULONG src, ULONG dst)
+{
+    U64 tbl = 0;
+    UCHAR buf[0x34];
+    if (!NT_SUCCESS(MemRead(proc, globalVa, &tbl, 8)) || !tbl) { K("[mdump] glowclone: table null\n"); return; }
+    if (!NT_SUCCESS(MemRead(proc, tbl + (U64)src * 0x34ULL, buf, 0x34))) { K("[mdump] glowclone: src read fail\n"); return; }
+    MemWrite(proc, tbl + (U64)dst * 0x34ULL, buf, 0x34);
+    KF("[mdump] glowclone %lu -> %lu (0x34 bytes)\n", src, dst);
+}
+
 static VOID AutoGlowAll(PEPROCESS proc)
 {
     UCHAR row = (UCHAR)(g_autoRow & 0xFF);
@@ -1649,13 +1848,9 @@ static VOID AutoGlowAll(PEPROCESS proc)
 
     /* ??????????/??????????? 240ms ???? */
     if (modBaseForNpc) {
-        U64 tbl = 0, entry;
-        if (NT_SUCCESS(MemRead(proc, modBaseForNpc + RVA_HIGHLIGHT_GLOBAL, &tbl, 8)) && tbl) {
-            entry = tbl + (U64)g_autoRow * 0x34ULL;
-            MemWrite(proc, entry + 0x04, &g_autoR, 4);
-            MemWrite(proc, entry + 0x08, &g_autoG, 4);
-            MemWrite(proc, entry + 0x0C, &g_autoB, 4);
-        }
+        /* 整行写：颜色 + 清掉距离/视线/队伍限制（原来是只写 RGB） */
+        GlowSetupRow(proc, modBaseForNpc + RVA_HIGHLIGHT_GLOBAL, g_autoRow,
+                     g_autoR, g_autoG, g_autoB, g_autoFlags, g_autoVis);
     }
 
     for (i = 0; i < g_entAddrCount && newN < 64; i++) {

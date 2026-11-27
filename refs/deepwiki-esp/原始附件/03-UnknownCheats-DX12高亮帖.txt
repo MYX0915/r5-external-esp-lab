@@ -1,0 +1,797 @@
+
+UnknownCheats - Leading the game hacking and cheat development scene since 2000	
+UnKnoWnCheaTs Game Hacking Portal	UnKnoWnCheaTs Game Hacking Forum – Cheats, Hacks, and Tutorials	Download Game Hacks, Cheats and Hacking Tools – UnKnoWnCheaTs	Donate to Support UnKnoWnCheaTs Game Hacking Community	User Settings and Preferences – UnKnoWnCheaTs Control Panel	Quick Access to Game Hacking Forums and Tools	Search UnKnoWnCheaTs	Join the UnKnoWnCheaTs Discord and IRC for Game Hacking Chat	Game Hacking Wiki – Tutorials and Guides on UnKnoWnCheaTs	Toggle Dark Mode
+
+Go Back	 	UnKnoWnCheaTs - Multiplayer Game Hacking and Cheats
+First-Person Shooters
+Apex Legends
+Reload this Page [Information] [DX12] Apex Legends Highlight System - Structure Analysis & Glow Activation
+Advanced Forum Search
+New Posts | New Threads
+New Posts: Last Login
+Mark All Forums Read
+Total Posts: 4
+Threads Started: 1
+Reputation: 10
+Last Login: Yesterday at 11:46 PM
+Private Messages: Unread 0, Total 0 (0% full)
+UnKnoWnCheaTs Community Rules
+
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook
+ 
+Thread Tools 	Search this Thread 	Rate Thread 
+[DX12] Apex Legends Highlight System - Structure Analysis & Glow Activation
+Old 13th August 2026, 01:13 AM	  #1
+Zedvy
+n00bie
+
+
+Zedvy's Avatar
+
+Join Date: Mar 2020
+Location: Tokyo
+Posts: 6
+Reputation: 1398
+Rep Power: 164
+Zedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slaves
+Points: 8,817, Level: 11
+Points: 8,817, Level: 11	Points: 8,817, Level: 11	Points: 8,817, Level: 11
+Level up: 11%, 983 Points needed
+Level up: 11%	Level up: 11%	Level up: 11%
+Activity: 9.1%
+Activity: 9.1%	Activity: 9.1%	Activity: 9.1%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Arrow [DX12] Apex Legends Highlight System - Structure Analysis & Glow Activation
+
+I recently came back to this game after a long break and struggled quite
+a bit with getting glow ESP working again, so I wanted to share my
+analysis results and the method that finally worked.
+
+Hope this helps someone 
+
+1. OVERVIEW
+
+The DX12 build resolves highlight styles through a global table
+(HighlightSettings, RVA 0x6015A70). The table is a continuous array
+of 0x34-byte records. The renderer reads a style selector byte at
+entity +0x294 and indexes the table as selector * 0x34. A bitmask at
++0x29D marks which of the 4 context slots (+0x295..+0x298) are
+focused, and toggling the fade parity at +0x2A8 makes the client
+consume the change.
+
+Table extent:
+- Tested table count: 128 rows
+- Total style storage: 128 * 0x34 = 0x1A00 bytes
+- The live count is consumed from the HighlightSettings header at
++0x18.
+
+2. HighlightStyle (stride 0x34)
+
+Code:
+struct HighlightStyle       // stride 0x34
+{
+    std::uint32_t functionBits;  // +0x00  mode bits, read as dword
+    float         colorR;        // +0x04
+    float         colorG;        // +0x08
+    float         colorB;        // +0x0C
+    float         parameter10;   // +0x10
+    float         parameter14;   // +0x14
+    float         parameter18;   // +0x18
+    float         parameter1C;   // +0x1C
+    float         maxDistance;   // +0x20
+    std::uint32_t field24;       // +0x24
+    std::uint32_t field28;       // +0x28
+    std::uint32_t field2C;       // +0x2C
+    std::int32_t  field30;       // +0x30  NOT a row index
+};
+static_assert(sizeof(HighlightStyle) == 0x34);
+Notes:
+- +0x00 is a dword of mode bits, not a float.
+- No RGBA array exists in this structure. Only RGB is confirmed at
++0x04 / +0x08 / +0x0C. Do not claim an alpha channel.
+- +0x10..+0x1C are unconfirmed parameters - keep them from a
+verified row instead of guessing semantics.
+- +0x30 is NOT a row index.
+
+Stride warning: parsing this continuous table at 0x40-byte boundaries
+makes each displayed row drift by +0x0C relative to the real 0x34-byte
+records. Always use stride 0x34.
+
+3. Entity Highlight Fields
+
+Code:
+  +0x294            uint8  style selector      // renderer reads THIS
+  +0x295..+0x298    uint8  genericContexts[4]
+  +0x299..+0x29C    unknown - do not touch
+  +0x29D            uint8  focusedMask         // bit0 = context slot 0
+  +0x2A0                  fade-duration state (exact sub-layout not
+                          established)
+  +0x2A8            uint32 m_highlightFadeParity // toggle on change
+IMPORTANT:
+- The renderer reads +0x294, not +0x295. Writing only +0x295 never
+selects a row - this was why modified rows were never rendered.
+- genericContexts[0] is NOT always a mirror of the selector. In the
+resting state they can hold different values. During activation we
+set them to the same row so focused slot 0 resolves correctly.
+- focusedMask is a bitmask with one bit per context slot, NOT a
+boolean. To activate slot 0: value |= 1.
+- Use uint8_t for the selector/context values. 0xFF is confirmed as
+the invalid selector value at +0x294. Context slots also commonly
+contain 0xFF as an unused value.
+- +0x299..+0x29C are unverified. Do not write.
+
+4. Activation Sequence
+
+Perform the selector/context/focus writes as one tightly grouped
+update, then toggle fadeParity last as the change notification.
+(External writes - there is no same-frame guarantee.)
+
+Code:
+  Step 1: entity +0x294 = row      // selector the renderer uses
+  Step 2: entity +0x295 = row      // contexts[0], so slot 0 is focused
+  Step 3: entity +0x29D |= 1       // focus slot 0 (bitmask)
+  Step 4: entity +0x2A8 ^= 1       // notify change
+5. Activation Procedure
+
+5a. Resolve the table
+
+Code:
+  uintptr_t settings;
+  Read(moduleBase + 0x6015A70, &settings, 8);
+  // 0x6015830 is null/stale in this build - do not use it.
+5b. Prepare a style row
+
+Option A (preferred) - patch a verified native row:
+Rows 50 (visible) and 2 (occluded) are native rows verified to render.
+Patching them changes those styles globally for every system that
+selects them, so always save the complete 0x34 rows and restore them
+on disable. Modify ONLY the RGB fields - keep functionBits and all
+parameters untouched.
+
+Code:
+  Read(settings + 50 * 0x34, &row50, 0x34);
+  row50.colorR = 1.0f;  row50.colorG = 0.10f; row50.colorB = 0.10f;
+  Write(settings + 50 * 0x34, &row50, 0x34);
+Option B - clone into a zeroed row:
+Search only within the live row count (128). A zero row is not
+guaranteed to remain unused, so save it, revalidate it before use,
+and restore it on disable. Clone a verified template row into it,
+then patch only RGB.
+
+5c. Apply to entity
+
+Code:
+  uint8_t  row = chosenRow;      // e.g. 50 (visible) or 2 (occluded)
+  uint8_t  focused;
+  uint32_t parity;
+ 
+  Read(entity + 0x29D, &focused, 1);
+  Read(entity + 0x2A8, &parity, 4);
+ 
+  Write(entity + 0x294, &row, 1);      // selector (renderer reads this)
+  Write(entity + 0x295, &row, 1);      // contexts[0]
+  focused |= 1;                         // bit 0 = slot 0
+  Write(entity + 0x29D, &focused, 1);
+  parity ^= 1;
+  Write(entity + 0x2A8, &parity, 4);
+5d. Restore on disable
+
+Save each written field individually before first write, and restore
+them individually - do not save a flat byte range:
+
+Code:
+  uint8_t  originalSelector;   // +0x294
+  uint8_t  originalContext0;   // +0x295
+  uint8_t  originalFocused;    // +0x29D
+  uint32_t originalParity;     // +0x2A8
+Also restore the borrowed style row(s) to their original 0x34 bytes.
+
+6. Common Pitfalls
+
+- Writing +0x295 without +0x294: the row is never selected, nothing
+renders.
+- Stride must be 0x34. 0x40-byte parsing drifts by 0x0C per row.
+- Global RVA is 0x6015A70 in this build (0x6015830 reads null).
+- focusedMask: use |= 1. Writing 1 wholesale clears the bits of the
+other slots.
+- Do not touch +0x299..+0x29C.
+- Parity must be toggled, never set to a constant.
+- 0xFF means invalid at +0x294; context slots use it as unused.
+- Do not assume rows 64..127 are free. Used rows exist past 64.
+
+7. Memory Layout Reference
+
+Code:
+HighlightStyle (stride 0x34):
+ 
+  +0x00  uint32  functionBits (mode)
+  +0x04  float   color R
+  +0x08  float   color G
+  +0x0C  float   color B
+  +0x10  float   parameter10
+  +0x14  float   parameter14
+  +0x18  float   parameter18
+  +0x1C  float   parameter1C
+  +0x20  float   maxDistance
+  +0x24  uint32  field24
+  +0x28  uint32  field28
+  +0x2C  uint32  field2C
+  +0x30  int32   field30 (not index)
+ 
+Entity highlight fields:
+ 
+  +0x294      uint8   style selector (renderer)
+  +0x295      uint8   genericContexts[0]
+  +0x296-298  uint8   genericContexts[1..3]
+  +0x299-29C          unknown - do not touch
+  +0x29D      uint8   focusedMask (|=1 for slot 0)
+  +0x2A0              fade-duration state (layout not established)
+  +0x2A8      uint32  fadeParity (^=1)
+ 
+Global:
+ 
+  HighlightSettings  = 0x6015A70
+Attached Thumbnails
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation-95c0ff87-761f-4d53-b904-c5b6eaf45ec1-png  
+__________________
+Anyone who want to contact me
+Add cworts_locy(Discord)
+Last edited by Zedvy; 13th August 2026 at 01:42 AM.
+Zedvy is offline
+Last Active: 23rd November 2026
+
+Add to Zedvy's Reputation Take from Zedvy's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 13th August 2026, 02:05 AM	  #2
+TingCPP
+In love with Infractions
+
+TingCPP's Avatar
+
+Join Date: May 2018
+Posts: 1,093
+Reputation: 36036
+Rep Power: 254
+TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!
+Recognitions
+Members who have contributed financial support towards UnKnoWnCheaTs. Donator (4)
+Points: 48,592, Level: 33
+Points: 48,592, Level: 33	Points: 48,592, Level: 33	Points: 48,592, Level: 33
+Level up: 18%, 2,808 Points needed
+Level up: 18%	Level up: 18%	Level up: 18%
+Activity: 9.4%
+Activity: 9.4%	Activity: 9.4%	Activity: 9.4%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Nothing really new.
+All of that has been discussed 100times on the reversal thread.
+
+But maybe this helps you:
+
+Code:
+struct HighlightSettings_t //Basically everything from HighlightContext_* functions
+{
+public:
+	uint8_t insideFunction;
+	uint8_t outsideFunction;
+	uint8_t outlineRadius; //*(_BYTE *)(0x34LL * (int)v4 + qword_146015A70 + 2) = (int)(float)((float)((float)(*(float *)v3.m128i_i32 * 255.0) * 0.125)+ 0.5);; //HighlightContext_SetRadius
+	uint8_t state : 6;
+	uint8_t shouldDraw : 1;
+	uint8_t postProcess : 1;
+	Color color;
+	Color color2;
+	float nearFadeDist;
+	float farFadeDist;
+	uint32_t focusedInside;
+	uint32_t focusedOutside;
+	uint32_t Flags; //HighlightContext_SetFlags
+	uint32_t DrawFunc; //HighlightContext_SetDrawFunc
+Code:
+enum eHIGHLIGHT_FLAG{
+	HIGHLIGHT_FLAG_NO_REQUIREMENTS = (0 << 0),
+	HIGHLIGHT_FLAG_ADS_FADE = (1 << 1),
+	HIGHLIGHT_FLAG_REQUIRE_CAN_PICK_UP_CLIP = (1 << 2),
+	HIGHLIGHT_FLAG_REQUIRE_CAN_PICK_UP_OFFHAND = (1 << 3),
+	HIGHLIGHT_FLAG_REQUIRE_PILOT = (1 << 4),
+	HIGHLIGHT_FLAG_REQUIRE_TITAN = (1 << 5),
+	HIGHLIGHT_FLAG_REQUIRE_SAME_TEAM = (1 << 6),
+	HIGHLIGHT_FLAG_REQUIRE_DIFFERENT_TEAM = (1 << 7),
+	HIGHLIGHT_FLAG_REQUIRE_FRIENDLY_TEAM = (1 << 8),
+	HIGHLIGHT_FLAG_REQUIRE_ENEMY_TEAM = (1 << 9),
+	HIGHLIGHT_FLAG_REQUIRE_LOCAL_PLAYER_IS_OWNER = (1 << 10),
+	HIGHLIGHT_FLAG_REQUIRE_LOW_MOVEMENT = (1 << 11),
+	HIGHLIGHT_FLAG_REQUIRE_HIGH_MOVEMENT = (1 << 12),
+	HIGHLIGHT_FLAG_CHECK_OFTEN = (1 << 13),
+	HIGHLIGHT_FLAG_DISABLE_DEATH_FADE = (1 << 14),
+	HIGHLIGHT_FLAG_TEAM_AGNOSTIC = (1 << 15),
+	HIGHLIGHT_FLAG_ADDITIONAL_LOS_CHECKS = (1 << 16),
+};
+ 
+enum eHIGHLIGHT_VIS {
+	HIGHLIGHT_VIS_NONE = 0,
+	HIGHLIGHT_VIS_FORCE_ON = 1,
+	HIGHLIGHT_VIS_ALWAYS = 2,
+	HIGHLIGHT_VIS_OCCLUDED = 3,
+	HIGHLIGHT_VIS_FULL_VIEW = 4,
+	HIGHLIGHT_VIS_LOS = 5,
+	HIGHLIGHT_VIS_LOS_ENTSONLYCONTENTSBLOCK = 6,
+	HIGHLIGHT_VIS_LOS_ENTSONLY_BLOCKSCAN = 7,
+};
+IIRC you can load / dump game\r2\scripts\highlight_context_drawfunc.txt for some enums, not quite sure if it was that. But one script also holds a ton of enums for highlight related stuff.
+
+You can also find quite a few enums on the PE directly. Take a look at this func:
+Code:
+0xc310c0 //48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC ? 48 8B F9 E8 ? ? ? ? 48 8B C8
+(You might need a fully decrypted dump, idk)
+
+
+Regarding "Table extent".
+Code:
+sub_1402F5740(v312, (unsigned int)"Highlight_SetCurrentContext", 0, 0, 1, 0, 1, 0, 0, 34);
+    LODWORD(v502) = 0;
+    v504 = v502;
+    v503 = (unsigned __int64)sub_140820890;
+->
+Code:
+  if ( (unsigned int)result <= 256 )
+
+For Entity related highlight stuff, check:
+C_BaseEntity::Highlight_* funcs
+
+
+Keep in mind that all of that funcs are related to the SquirrelVM and VM calls
+__________________
+
+Last edited by TingCPP; 13th August 2026 at 02:08 AM.
+TingCPP is offline
+Last Active: Today
+
+Add to TingCPP's Reputation Take from TingCPP's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 13th August 2026, 02:20 AM	  #3
+Zedvy
+n00bie
+
+
+Zedvy's Avatar
+
+Threadstarter
+Join Date: Mar 2020
+Location: Tokyo
+Posts: 6
+Reputation: 1398
+Rep Power: 164
+Zedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slaves
+Points: 8,817, Level: 11
+Points: 8,817, Level: 11	Points: 8,817, Level: 11	Points: 8,817, Level: 11
+Level up: 11%, 983 Points needed
+Level up: 11%	Level up: 11%	Level up: 11%
+Activity: 9.1%
+Activity: 9.1%	Activity: 9.1%	Activity: 9.1%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Talking
+Quote:
+Originally Posted by TingCPP View Post
+Nothing really new.
+All of that has been discussed 100times on the reversal thread.
+
+But maybe this helps you:
+
+Code:
+struct HighlightSettings_t //Basically everything from HighlightContext_* functions
+{
+public:
+	uint8_t insideFunction;
+	uint8_t outsideFunction;
+	uint8_t outlineRadius; //*(_BYTE *)(0x34LL * (int)v4 + qword_146015A70 + 2) = (int)(float)((float)((float)(*(float *)v3.m128i_i32 * 255.0) * 0.125)+ 0.5);; //HighlightContext_SetRadius
+	uint8_t state : 6;
+	uint8_t shouldDraw : 1;
+	uint8_t postProcess : 1;
+	Color color;
+	Color color2;
+	float nearFadeDist;
+	float farFadeDist;
+	uint32_t focusedInside;
+	uint32_t focusedOutside;
+	uint32_t Flags; //HighlightContext_SetFlags
+	uint32_t DrawFunc; //HighlightContext_SetDrawFunc
+Code:
+enum eHIGHLIGHT_FLAG{
+	HIGHLIGHT_FLAG_NO_REQUIREMENTS = (0 << 0),
+	HIGHLIGHT_FLAG_ADS_FADE = (1 << 1),
+	HIGHLIGHT_FLAG_REQUIRE_CAN_PICK_UP_CLIP = (1 << 2),
+	HIGHLIGHT_FLAG_REQUIRE_CAN_PICK_UP_OFFHAND = (1 << 3),
+	HIGHLIGHT_FLAG_REQUIRE_PILOT = (1 << 4),
+	HIGHLIGHT_FLAG_REQUIRE_TITAN = (1 << 5),
+	HIGHLIGHT_FLAG_REQUIRE_SAME_TEAM = (1 << 6),
+	HIGHLIGHT_FLAG_REQUIRE_DIFFERENT_TEAM = (1 << 7),
+	HIGHLIGHT_FLAG_REQUIRE_FRIENDLY_TEAM = (1 << 8),
+	HIGHLIGHT_FLAG_REQUIRE_ENEMY_TEAM = (1 << 9),
+	HIGHLIGHT_FLAG_REQUIRE_LOCAL_PLAYER_IS_OWNER = (1 << 10),
+	HIGHLIGHT_FLAG_REQUIRE_LOW_MOVEMENT = (1 << 11),
+	HIGHLIGHT_FLAG_REQUIRE_HIGH_MOVEMENT = (1 << 12),
+	HIGHLIGHT_FLAG_CHECK_OFTEN = (1 << 13),
+	HIGHLIGHT_FLAG_DISABLE_DEATH_FADE = (1 << 14),
+	HIGHLIGHT_FLAG_TEAM_AGNOSTIC = (1 << 15),
+	HIGHLIGHT_FLAG_ADDITIONAL_LOS_CHECKS = (1 << 16),
+};
+ 
+enum eHIGHLIGHT_VIS {
+	HIGHLIGHT_VIS_NONE = 0,
+	HIGHLIGHT_VIS_FORCE_ON = 1,
+	HIGHLIGHT_VIS_ALWAYS = 2,
+	HIGHLIGHT_VIS_OCCLUDED = 3,
+	HIGHLIGHT_VIS_FULL_VIEW = 4,
+	HIGHLIGHT_VIS_LOS = 5,
+	HIGHLIGHT_VIS_LOS_ENTSONLYCONTENTSBLOCK = 6,
+	HIGHLIGHT_VIS_LOS_ENTSONLY_BLOCKSCAN = 7,
+};
+IIRC you can load / dump game\r2\scripts\highlight_context_drawfunc.txt for some enums, not quite sure if it was that. But one script also holds a ton of enums for highlight related stuff.
+
+You can also find quite a few enums on the PE directly. Take a look at this func:
+Code:
+0xc310c0 //48 89 5C 24 ? 48 89 74 24 ? 57 48 83 EC ? 48 8B F9 E8 ? ? ? ? 48 8B C8
+(You might need a fully decrypted dump, idk)
+
+
+Regarding "Table extent".
+Code:
+sub_1402F5740(v312, (unsigned int)"Highlight_SetCurrentContext", 0, 0, 1, 0, 1, 0, 0, 34);
+    LODWORD(v502) = 0;
+    v504 = v502;
+    v503 = (unsigned __int64)sub_140820890;
+->
+Code:
+  if ( (unsigned int)result <= 256 )
+
+For Entity related highlight stuff, check:
+C_BaseEntity::Highlight_* funcs
+
+
+Keep in mind that all of that funcs are related to the SquirrelVM and VM calls
+Appreciate the additional info and structures!
+
+I actually looked through quite a few recent threads before posting, but struggled to find consolidated, up-to-date information. That’s why I decided to write this thread—to make it easier for returning devs to get back on track without digging through hundreds of old posts.
+
+The breakdown of the first 4 bytes (`insideFunction`, `outlineRadius`, etc.) and `color2` at `+0x10` completely clears up the unconfirmed fields in my `HighlightStyle` struct. Also great to know that the max table bound is 256 instead of 128.
+
+Updated my local notes with your `eHIGHLIGHT_FLAG` enums as well. Thanks again for sharing!
+__________________
+Anyone who want to contact me
+Add cworts_locy(Discord)
+Zedvy is offline
+Last Active: 23rd November 2026
+
+Add to Zedvy's Reputation Take from Zedvy's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 13th August 2026, 04:57 AM	  #4
+R7flex2
+Banned
+
+R7flex2's Avatar
+
+Join Date: Apr 2020
+Posts: 104
+Reputation: 7170
+Rep Power: 170
+R7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATS
+Points: 14,385, Level: 15
+Points: 14,385, Level: 15	Points: 14,385, Level: 15	Points: 14,385, Level: 15
+Level up: 57%, 615 Points needed
+Level up: 57%	Level up: 57%	Level up: 57%
+Activity: 2.8%
+Activity: 2.8%	Activity: 2.8%	Activity: 2.8%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+thanks you guys for sharings.
+__________________
+s4ncak starter kit
+
+R7flex2 is offline
+Last Active: 24th November 2026
+
+Add to R7flex2's Reputation Take from R7flex2's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 14th August 2026, 03:21 PM	  #5
+camxcore
+1337 H4x0!2
+
+
+camxcore's Avatar
+
+Join Date: Aug 2015
+Posts: 138
+Reputation: 4870
+Rep Power: 280
+camxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating community
+Points: 13,751, Level: 15
+Points: 13,751, Level: 15	Points: 13,751, Level: 15	Points: 13,751, Level: 15
+Level up: 11%, 1,249 Points needed
+Level up: 11%	Level up: 11%	Level up: 11%
+Activity: 2.3%
+Activity: 2.3%	Activity: 2.3%	Activity: 2.3%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Quote:
+Originally Posted by Zedvy View Post
+Appreciate the additional info and structures!
+
+I actually looked through quite a few recent threads before posting, but struggled to find consolidated, up-to-date information. That’s why I decided to write this thread—to make it easier for returning devs to get back on track without digging through hundreds of old posts.
+
+The breakdown of the first 4 bytes (`insideFunction`, `outlineRadius`, etc.) and `color2` at `+0x10` completely clears up the unconfirmed fields in my `HighlightStyle` struct. Also great to know that the max table bound is 256 instead of 128.
+
+Updated my local notes with your `eHIGHLIGHT_FLAG` enums as well. Thanks again for sharing!
+Are people just translating with the clankers or are the clankers on this website
+camxcore is offline
+Last Active: 13th November 2026
+
+Add to camxcore's Reputation Take from camxcore's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 15th August 2026, 09:03 AM	  #6
+Zedvy
+n00bie
+
+
+Zedvy's Avatar
+
+Threadstarter
+Join Date: Mar 2020
+Location: Tokyo
+Posts: 6
+Reputation: 1398
+Rep Power: 164
+Zedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slaves
+Points: 8,817, Level: 11
+Points: 8,817, Level: 11	Points: 8,817, Level: 11	Points: 8,817, Level: 11
+Level up: 11%, 983 Points needed
+Level up: 11%	Level up: 11%	Level up: 11%
+Activity: 9.1%
+Activity: 9.1%	Activity: 9.1%	Activity: 9.1%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Quote:
+Originally Posted by camxcore View Post
+Are people just translating with the clankers or are the clankers on this website
+Beep boop. Just a non-native using LLM to translate, but thanks for the compliment on my formatting.
+__________________
+Anyone who want to contact me
+Add cworts_locy(Discord)
+Zedvy is offline
+Last Active: 23rd November 2026
+
+Add to Zedvy's Reputation Take from Zedvy's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 15th August 2026, 11:16 AM	  #7
+R7flex2
+Banned
+
+R7flex2's Avatar
+
+Join Date: Apr 2020
+Posts: 104
+Reputation: 7170
+Rep Power: 170
+R7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATS
+Points: 14,385, Level: 15
+Points: 14,385, Level: 15	Points: 14,385, Level: 15	Points: 14,385, Level: 15
+Level up: 57%, 615 Points needed
+Level up: 57%	Level up: 57%	Level up: 57%
+Activity: 2.8%
+Activity: 2.8%	Activity: 2.8%	Activity: 2.8%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+you guys figured showing glow behind walls?
+
+i tried with squirrel script but i can't handle
+__________________
+s4ncak starter kit
+
+R7flex2 is offline
+Last Active: 24th November 2026
+
+Add to R7flex2's Reputation Take from R7flex2's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th August 2026, 05:05 AM	  #8
+IDKhadtodo
+Member
+
+
+IDKhadtodo's Avatar
+
+Join Date: May 2023
+Posts: 60
+Reputation: 1384
+Rep Power: 87
+IDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slaves
+Points: 3,956, Level: 6
+Points: 3,956, Level: 6	Points: 3,956, Level: 6	Points: 3,956, Level: 6
+Level up: 40%, 544 Points needed
+Level up: 40%	Level up: 40%	Level up: 40%
+Activity: 14.7%
+Activity: 14.7%	Activity: 14.7%	Activity: 14.7%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Quote:
+Originally Posted by R7flex2 View Post
+you guys figured showing glow behind walls?
+
+i tried with squirrel script but i can't handle
+here, the missing stuff, will you handle ig.
+Code:
+    while (true)
+    {
+        WaitFrame()
+ 
+        array<entity> NPCs = GetNPCArray()
+       
+        int CtxId = HighlightContext_GetId( - YOULL GET IT URSELF ;) - )
+ 
+        HighlightContext_SetRadius(CtxId, 0)
+        HighlightContext_SetFarFadeDistance(CtxId, 5000.0)
+        HighlightContext_SetNearFadeDistance(CtxId, 1.0)
+ 
+        foreach ( NPC in NPCs)
+        {
+            if (!IsValid(NPC))
+                continue
+ 
+            if (!IsAlive(NPC))
+                continue
+ 
+            vector Color = <1, 1, 1>
+ 
+            NPC.Highlight_SetCurrentContext( CtxId )
+            NPC.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+            NPC.Highlight_OverrideParam( 0, Color )
+        }
+    }
+Last edited by IDKhadtodo; 16th August 2026 at 05:09 AM. Reason: code blocks
+IDKhadtodo is offline
+Last Active: 16th November 2026
+
+Add to IDKhadtodo's Reputation Take from IDKhadtodo's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th August 2026, 07:48 AM	  #9
+R7flex2
+Banned
+
+R7flex2's Avatar
+
+Join Date: Apr 2020
+Posts: 104
+Reputation: 7170
+Rep Power: 170
+R7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATS
+Points: 14,385, Level: 15
+Points: 14,385, Level: 15	Points: 14,385, Level: 15	Points: 14,385, Level: 15
+Level up: 57%, 615 Points needed
+Level up: 57%	Level up: 57%	Level up: 57%
+Activity: 2.8%
+Activity: 2.8%	Activity: 2.8%	Activity: 2.8%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Quote:
+Originally Posted by IDKhadtodo View Post
+here, the missing stuff, will you handle ig.
+Code:
+    while (true)
+    {
+        WaitFrame()
+ 
+        array<entity> NPCs = GetNPCArray()
+       
+        int CtxId = HighlightContext_GetId( - YOULL GET IT URSELF ;) - )
+ 
+        HighlightContext_SetRadius(CtxId, 0)
+        HighlightContext_SetFarFadeDistance(CtxId, 5000.0)
+        HighlightContext_SetNearFadeDistance(CtxId, 1.0)
+ 
+        foreach ( NPC in NPCs)
+        {
+            if (!IsValid(NPC))
+                continue
+ 
+            if (!IsAlive(NPC))
+                continue
+ 
+            vector Color = <1, 1, 1>
+ 
+            NPC.Highlight_SetCurrentContext( CtxId )
+            NPC.Highlight_SetVisibilityType( HIGHLIGHT_VIS_ALWAYS )
+            NPC.Highlight_OverrideParam( 0, Color )
+        }
+    }
+thanks, buddy, i already figured that out. the last time i cheated was 4-5 years ago, and the glow system back then seemed to work better. i miss that system :/
+__________________
+s4ncak starter kit
+
+R7flex2 is offline
+Last Active: 24th November 2026
+
+Add to R7flex2's Reputation Take from R7flex2's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th August 2026, 12:28 PM	  #10
+IDKhadtodo
+Member
+
+
+IDKhadtodo's Avatar
+
+Join Date: May 2023
+Posts: 60
+Reputation: 1384
+Rep Power: 87
+IDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slaves
+Points: 3,956, Level: 6
+Points: 3,956, Level: 6	Points: 3,956, Level: 6	Points: 3,956, Level: 6
+Level up: 40%, 544 Points needed
+Level up: 40%	Level up: 40%	Level up: 40%
+Activity: 14.7%
+Activity: 14.7%	Activity: 14.7%	Activity: 14.7%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Quote:
+Originally Posted by R7flex2 View Post
+thanks, buddy, i already figured that out. the last time i cheated was 4-5 years ago, and the glow system back then seemed to work better. i miss that system :/
+ye, i miss it too
+IDKhadtodo is offline
+Last Active: 16th November 2026
+
+Add to IDKhadtodo's Reputation Take from IDKhadtodo's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook
+
+ collapse quick replyQuick Reply
+Message:
+Remove Text Formatting
+	
+Bold
+Italic
+Underline
+	
+
+	
+	
+Insert Link
+Insert Image
+	
+Wrap [QUOTE] tags around selected text
+	
+Wrap [CODE] tags around selected text
+ 	
+Decrease Size
+Increase Size
+
+
+Options
+Quote message in reply?
+Old Thread Warning
+exclamation iconThis Thread is more than 103 days old. It is very likely that it does not need any further discussion and thus bumping it serves no purpose.
+If you still feel it is necessary to make a new reply, you can still do so though.
+I am aware that this Thread is rather old but I still want to make a reply.
+ 
+
+collapse similar threadsSimilar Threads
+Thread	Thread Starter	Forum	Replies	Last Post
+[Help] Apex Legends DMA Dump — Can't Find Highlight Offsets	GmagGig	Apex Legends	1	26th June 2025 03:38 AM
+
+Currently Active Users Viewing This Thread: 1 (1 members and 0 guests)
+myx0146
+
+Tags
+table, 0x34, selector, count, highlight, style, 0x2a8, makes, parity, fade
+
+« Previous Thread | Next Thread »
+
+Forum Jump
+
+    Apex Legends
+
+Log Out myx0146
+
+All times are GMT -8. The time now is 10:45 PM.
+Copyright ©2000-2026, Unknowncheats™
+DMCA - View Staff
+Terms of Use - Privacy Policy - Forum Rules

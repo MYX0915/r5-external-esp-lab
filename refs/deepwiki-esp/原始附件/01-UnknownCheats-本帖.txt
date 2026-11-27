@@ -1,0 +1,1407 @@
+
+UnknownCheats - Leading the game hacking and cheat development scene since 2000	
+UnKnoWnCheaTs Game Hacking Portal	UnKnoWnCheaTs Game Hacking Forum – Cheats, Hacks, and Tutorials	Download Game Hacks, Cheats and Hacking Tools – UnKnoWnCheaTs	Donate to Support UnKnoWnCheaTs Game Hacking Community	User Settings and Preferences – UnKnoWnCheaTs Control Panel	Quick Access to Game Hacking Forums and Tools	Search UnKnoWnCheaTs	Join the UnKnoWnCheaTs Discord and IRC for Game Hacking Chat	Game Hacking Wiki – Tutorials and Guides on UnKnoWnCheaTs	Toggle Dark Mode
+
+Go Back	 	UnKnoWnCheaTs - Multiplayer Game Hacking and Cheats
+First-Person Shooters
+Apex Legends
+Reload this Page [Release] Some Apex squirrel scripts
+Advanced Forum Search
+New Posts | New Threads
+New Posts: Last Login
+Mark All Forums Read
+Total Posts: 4
+Threads Started: 1
+Reputation: 10
+Last Login: Yesterday at 11:46 PM
+Private Messages: Unread 0, Total 0 (0% full)
+UnKnoWnCheaTs Community Rules
+
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook
+ 
+Thread Tools 	Search this Thread 	Rate Thread 
+Some Apex squirrel scripts
+Old 2nd July 2022, 09:36 AM	  #1
+jzhfgvfwu
+Junior Member
+
+
+jzhfgvfwu's Avatar
+
+Join Date: Mar 2020
+Posts: 49
+Reputation: 9544
+Rep Power: 172
+jzhfgvfwu DEFINES UNKNOWNCHEATSjzhfgvfwu DEFINES UNKNOWNCHEATSjzhfgvfwu DEFINES UNKNOWNCHEATSjzhfgvfwu DEFINES UNKNOWNCHEATSjzhfgvfwu DEFINES UNKNOWNCHEATSjzhfgvfwu DEFINES UNKNOWNCHEATSjzhfgvfwu DEFINES UNKNOWNCHEATSjzhfgvfwu DEFINES UNKNOWNCHEATSjzhfgvfwu DEFINES UNKNOWNCHEATSjzhfgvfwu DEFINES UNKNOWNCHEATSjzhfgvfwu DEFINES UNKNOWNCHEATS
+Points: 15,124, Level: 16
+Points: 15,124, Level: 16	Points: 15,124, Level: 16	Points: 15,124, Level: 16
+Level up: 9%, 1,276 Points needed
+Level up: 9%	Level up: 9%	Level up: 9%
+Activity: 3.1%
+Activity: 3.1%	Activity: 3.1%	Activity: 3.1%
+Last Achievements
+Some Apex squirrel scriptsSome Apex squirrel scriptsSome Apex squirrel scripts
+Some Apex squirrel scripts
+Hello, I've decided to release some useful squirrel scripts for the apex sqvm. I'll leave figuring out how to execute your own scripts to the reader.
+
+Fullmap radar
+Code:
+local fullmap = compilestring(" (function(){
+	entity player = GetLocalClientPlayer();
+	player.EndSignal( "OnDestroy" );
+ 
+	array<var> fullMapRuis; OnThreadEnd(function() : ( fullMapRuis )
+	{
+		foreach( var ruiToDestroy in fullMapRuis )
+		{
+			Fullmap_RemoveRui(ruiToDestroy); RuiDestroyIfAlive(ruiToDestroy);
+		};
+ 
+		fullMapRuis.clear();
+	});
+ 
+	int team = player.GetTeam();
+ 
+	while(1)
+	{
+		if(IsValid(player))
+		{
+			foreach( var ruiToDestroy in fullMapRuis )
+			{
+			Fullmap_RemoveRui( ruiToDestroy );
+			RuiDestroy( ruiToDestroy );
+			};
+ 
+			fullMapRuis.clear();
+ 
+			if( Fullmap_IsVisible() == false || GetCurrentPlaylistVarBool( "exec_fullmap_uav", false ) == false )
+			{
+				wait 0.5;
+				continue;
+			};
+ 
+			array<entity> aliveEnemies = GetPlayerArrayOfEnemies_Alive(team);
+ 
+			foreach( entity enemy in aliveEnemies )
+			{
+				var fRui = FullMap_CommonAdd( $"ui/in_world_minimap_square_simple.rpak");
+				FullMap_CommonTrackEntOrigin( fRui, enemy, false );
+				RuiTrackFloat2( fRui, "zoomPos", null, RUI_TRACK_BIG_MAP_ZOOM_ANCHOR );
+				RuiTrackFloat( fRui, "zoomFactor", null, RUI_TRACK_BIG_MAP_ZOOM_SCALE );
+				RuiTrackFloat3( fRui, "objectPos", enemy, RUI_TRACK_ABSORIGIN_FOLLOW );
+				RuiTrackFloat3( fRui, "objectAngles", enemy, RUI_TRACK_EYEANGLES_FOLLOW );
+				RuiSetFloat3( fRui, "objColor", GetKeyColor( COLORID_MINIMAP_ENEMY_REF ) * ( 1.0 / 255.0 ) );
+				RuiSetFloat( fRui,"objectSize", 4.0 );
+				RuiSetImage( fRui, "iconImage",$"rui/hud/minimap/compass_icon_player");
+				Fullmap_AddRui( fRui );
+				fullMapRuis.append(fRui);
+			};
+ 
+			wait 3.0;
+			foreach( var ruiToDestroy in fullMapRuis )
+			{
+				Fullmap_RemoveRui( ruiToDestroy );
+				RuiDestroyIfAlive( ruiToDestroy );
+			};
+ 
+			fullMapRuis.clear();
+		};
+		WaitFrame();
+	};
+})() ", "cl_fm_script.nut")
+Minimap radar
+Code:
+local minimap = compilestring(" (function(){entity player = GetLocalClientPlayer();
+player.EndSignal( "OnDestroy" );
+array<var>fullMapRuis;
+ 
+OnThreadEnd(function() : ( fullMapRuis )
+{
+	foreach( var ruiToDestroy in fullMapRuis )
+	{
+		Minimap_CommonCleanup(ruiToDestroy);
+	};
+		fullMapRuis.clear();
+});
+ 
+		int team = player.GetTeam();
+ 
+		while(1)
+		{
+			if(IsValid(player))
+			{
+				foreach( var ruiToDestroy in fullMapRuis )
+				{
+					Minimap_CommonCleanup( ruiToDestroy );
+				};
+ 
+				fullMapRuis.clear();
+ 
+				if( GetCurrentPlaylistVarBool( "exec_minimap_uav", false ) == false )
+				{
+					wait 3.0;
+					continue;
+				};
+ 
+				array<entity> aliveEnemies = GetPlayerArrayOfEnemies_Alive(team);
+ 
+				foreach( entity enemy in aliveEnemies )
+				{
+					var fRui = Minimap_AddEnemyToMinimap(enemy);
+					Minimap_CommonTrackEntOrigin(fRui, enemy, true);
+					fullMapRuis.append(fRui);
+				};
+ 
+				wait 5.0;
+ 
+				foreach( var ruiToDestroy in fullMapRuis )
+				{
+					Minimap_CommonCleanup( ruiToDestroy );
+				};
+ 
+				fullMapRuis.clear();
+			};
+ 
+			WaitFrame();
+		};
+ 
+})() ", "cl_mm_scripts.nut")
+Triggerbot
+Code:
+local trigger = compilestring(" (function()
+{
+	entity player = GetLocalClientPlayer();
+	player.EndSignal( "OnDestroy" );
+	while(true)
+	{
+		if(IsValid(player) && IsAlive(player) && player.GetBleedoutState() == BS_NOT_BLEEDING_OUT && GetCurrentPlaylistVarBool( "tb", false ) )
+		{
+			entity activeWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand );
+			if( activeWeapon &&
+			IsValid(activeWeapon) &&
+			!activeWeapon.IsReloading() &&
+			(((IsWeaponInSingleShotMode(activeWeapon) || IsWeaponInBurstMode(activeWeapon)) && activeWeapon.IsReadyToFire() == true) || IsWeaponInAutomaticMode(activeWeapon)))
+			{
+				bool bBocek = activeWeapon.GetWeaponClassName() == "mp_weapon_bow";
+				if(!bBocek && (InputIsButtonDown( MOUSE_LEFT ) || InputIsButtonDown( BUTTON_A )))
+				{
+					WaitFrame();
+					continue;
+				};
+ 
+				vector crosshairStart = player.EyePosition();
+				vector crosshairEnd = crosshairStart + player.GetViewForward() * 250000;
+				entity undercrosshair = player.GetTargetUnderCrosshair();
+				entity crosshairEnt = null;
+ 
+				if(undercrosshair == null)
+				{
+					TraceResults crosshairResults = TraceLine( crosshairStart, crosshairEnd, player, TRACE_MASK_SHOT, TRACE_COLLISION_GROUP_NONE, player );
+					crosshairEnt = crosshairResults.hitEnt;
+ 
+					if ( IsValid( crosshairEnt ) && (crosshairEnt.GetScriptName() == "gibraltar_gun_shield" || crosshairEnt.GetScriptName() == "amped_wall"))
+					{
+						var deferredTrace = DeferredTraceLine( crosshairStart, crosshairEnd, crosshairEnt, TRACE_MASK_SHOT, TRACE_COLLISION_GROUP_NONE);while ( IsDeferredTraceFinished( deferredTrace ) == false)
+						{
+							WaitFrame();
+						};
+ 
+						crosshairResults = GetDeferredTraceResult( deferredTrace );
+						crosshairEnt = crosshairResults.hitEnt;
+					};
+				}
+				else
+				{
+					crosshairEnt = undercrosshair;
+				};
+ 
+				if ( IsValid(player) &&
+				IsAlive(player) &&
+				IsValid( crosshairEnt ) &&
+				(IsFiringRangeGameMode() ||
+				IsSurvivalTraining() ||
+				((GameRules_GetGameMode() == GAMEMODE_CONTROL && (crosshairEnt.GetTeam() % 2) != (player.GetTeam() % 2)) ||
+				(GameRules_GetGameMode() != GAMEMODE_CONTROL && crosshairEnt.GetTeam() != player.GetTeam()))) &&
+				(crosshairEnt.IsPlayer() || IsTrainingDummie(crosshairEnt) || IsProwler( crosshairEnt ) || IsSpider( crosshairEnt )) )
+				{
+					if(GetCurrentPlaylistVarBool( "trigger_ignore_down", false ) == false || crosshairEnt.GetBleedoutState() == BS_NOT_BLEEDING_OUT)
+					{
+						if(bBocek && activeWeapon.GetWeaponChargeFraction() == 1.0)
+						{
+							player.ClientCommand("-attack");
+						};
+ 
+						if(!bBocek)
+						{
+							player.ClientCommand("+attack");
+							player.ClientCommand("-attack");
+						};
+					}
+				}
+			}
+		};
+ 
+		WaitFrame();
+	}
+})() ", "cl_shooting.nut")
+Item icon ESP
+Code:
+local itemRui = compilestring(" (function()
+{
+	entity player = GetLocalClientPlayer();
+	player.EndSignal( "OnDestroy" );
+	array<var> itemRuis;
+ 
+	while(1)
+	{
+		if(IsValid(player) && IsAlive(player))
+		{
+			if( GetCurrentPlaylistVarBool( "script_selection_key_20", false ) == false )
+			{
+				if(itemRuis.len())
+				{
+					foreach( var ruiToDestroy in itemRuis )
+					{
+						RuiDestroyIfAlive( ruiToDestroy );
+					};
+ 
+					itemRuis.clear();
+				};
+ 
+				wait 0.2;
+				continue;
+			};
+ 
+			array<entity> NearbyLoots = GetSurvivalLootNearbyPlayer( player, 2000, false, false, false );
+			foreach( entity loot in NearbyLoots )
+			{
+				if ( IsValid( loot ))
+				{
+					LootData lootData = SURVIVAL_Loot_GetLootDataByIndex( loot.GetSurvivalInt() );
+					LootRef lootRef = SURVIVAL_CreateLootRef( lootData, loot );
+ 
+					lootRef.count = loot.GetClipCount();
+					var farRui = null;
+ 
+					if(SURVIVAL_IsLootAnUpgrade(player, lootRef.lootEnt, lootData, eLootContext.GROUND) || lootData.lootType == eLootType.MAINWEAPON)
+					{
+						if (lootData.lootType == eLootType.MAINWEAPON)
+						{
+							farRui = CreateFullscreenRui( $"ui/loot_pickup_hint_weapon_far.rpak", -1 );
+						}
+						else
+						{
+							farRui = CreateFullscreenRui( $"ui/loot_pickup_hint_far.rpak", -1 );
+						};
+ 
+						RuiTrackFloat3( farRui, "worldPos", loot, RUI_TRACK_ABSORIGIN_FOLLOW );
+						RuiSetBool( farRui, "isFullyKitted", SURVIVAL_Weapon_IsAttachmentLocked( lootData.ref ) );
+						RuiSetBool( farRui, "isVisible", true );
+						RuiSetImage( farRui, "iconImage", lootData.hudIcon );
+						RuiSetInt( farRui, "lootTier", lootData.tier );
+						vector iconScale = lootData.lootType == eLootType.MAINWEAPON ? <1.2, 0.6, 0.0> : <0.6, 0.6, 0.0>;
+						RuiSetFloat2( farRui, "iconScale", iconScale );
+						RuiSetBool( farRui, "isPingedByUs", true );
+					};
+ 
+					if(farRui != null)
+					{
+						itemRuis.append(farRui);
+					};
+				};
+			};
+ 
+			wait 0.2;
+ 
+			foreach( var ruiToDestroy in itemRuis )
+			{
+				RuiDestroyIfAlive( ruiToDestroy ); };itemRuis.clear();
+				continue;
+		};
+ 
+		wait 0.5;
+ 
+	}
+})() ", "cl_itemrui_script.nut")
+Autoloot
+Code:
+GetCurrentPlaylistVarInt("ic8", EquipmentSlot_GetEquipmentTier( player, "incapshield" ));
+GetCurrentPlaylistVarInt("ba8", EquipmentSlot_GetEquipmentTier( player, "backpack" ));
+bool l_e = GetCurrentPlaylistVarBool( "l_e", false );
+bool l_a = GetCurrentPlaylistVarBool( "l_a", false );
+bool l_g = GetCurrentPlaylistVarBool( "l_g", false );
+bool l_h = GetCurrentPlaylistVarBool( "l_h", false );
+bool l_o = GetCurrentPlaylistVarBool( "l_o", false );
+bool l_w = GetCurrentPlaylistVarBool( "l_w", false );
+bool p_s = GetCurrentPlaylistVarBool( "p_s", false );
+bool l_at = GetCurrentPlaylistVarBool( "l_at", false );
+ 
+//Autoloot
+if ( GetCurrentPlaylistVarBool( "exec_autoloot", false ) == true )
+{
+	local ammoTypes = [];
+	foreach ( weapon in SURVIVAL_GetPrimaryWeapons( player ) )
+	{
+		string className = weapon.GetWeaponClassName();
+		if ( SURVIVAL_Loot_IsRefValid( className ) )
+		{
+			LootData data = SURVIVAL_Loot_GetLootDataByRef( className );
+			if(data.tier == eLootTier.HEIRLOOM)
+			{
+				continue;
+			};
+ 
+			ammoTypes.append(data.ammoType);
+		};
+	};
+ 
+	array<entity> loots = GetSurvivalLootNearbyPlayer( player, SURVIVAL_PICKUP_ALL_MAX_RANGE, false, false, false );
+	foreach (entity item in loots)
+	{
+		if(IsValid(item))
+		{
+			LootData data = SURVIVAL_Loot_GetLootDataByIndex( item.GetSurvivalInt() );
+			int count = SURVIVAL_CountItemsInInventory( player, data.ref );
+			int count2 = data.inventorySlotCount;
+ 
+			if(data.lootType == eLootType.ATTACHMENT)
+			{
+				array<string> attachPoints = GetAttachPointsForAttachment( data.ref );
+				if(attachPoints.len() && attachPoints[0] == "sight")
+				{
+					continue;
+				};
+			};
+ 
+			if((l_w && data.lootType == eLootType.MAINWEAPON) || (l_at && data.lootType == eLootType.ATTACHMENT) || (l_e && (data.lootType == eLootType.HELMET|| data.lootType == eLootType.BACKPACK || data.lootType == eLootType.INCAPSHIELD)))
+			{
+				if(SURVIVAL_IsLootAnUpgrade(player, item, data, eLootContext.GROUND))
+				{
+					Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, PICKUP_FLAG_DONT_COUNT_TOWARD_BLACK_MARKET_QUOTA , null );
+					wait 0.1;
+				};
+ 
+			};
+			else if (l_e && data.lootType == eLootType.ARMOR)
+			{
+				if(p_s)
+				{
+					int currentShields = SURVIVAL_GetPlayerShieldHealthFromArmor( player );
+					int lootShields    = GetPropSurvivalMainPropertyFromEnt( item );
+					if(currentShields < lootShields)
+					{
+						Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, PICKUP_FLAG_DONT_COUNT_TOWARD_BLACK_MARKET_QUOTA , null );
+						wait 0.1;
+					};
+				}
+				else
+				{
+					if(SURVIVAL_IsLootAnUpgrade(player, item, data, eLootContext.GROUND))
+					{
+						Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, PICKUP_FLAG_DONT_COUNT_TOWARD_BLACK_MARKET_QUOTA , null );
+						wait 0.1;
+					};
+				};
+			}
+			else if(l_a && data.lootType == eLootType.AMMO && ammoTypes.find(data.ref) != -1)
+			{
+				float ratio = 3;if(ammoTypes.len() == 2 && ammoTypes[0] == ammoTypes[1]){ratio = 5;};if(count / count2 < ratio)
+				{
+					Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, PICKUP_FLAG_DONT_COUNT_TOWARD_BLACK_MARKET_QUOTA , null );
+					wait 0.1;
+				};
+			}
+			else if((l_h && data.lootType == eLootType.HEALTH) || (l_o && data.lootType == eLootType.ORDNANCE) || (l_g && data.lootType == eLootType.GADGET) )
+			{
+				if(count / count2 < 1)
+				{
+					Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, PICKUP_FLAG_DONT_COUNT_TOWARD_BLACK_MARKET_QUOTA , null );
+					wait 0.1;
+				};
+			};
+		};
+	};
+ 
+	//deathboxes
+	array<entity> nearbyDeathBoxes = ArrayWithin( GetAllDeathBoxes(), player.GetOrigin(), 160 );
+	foreach ( entity deathbox in nearbyDeathBoxes )
+	{
+		if(IsValid(deathbox))
+		{
+			if(deathbox.GetLinkEntArray().len() > 0)
+			{
+				foreach (entity item in deathbox.GetLinkEntArray())
+				{
+					if(IsValid(item))
+					{
+						LootData data = SURVIVAL_Loot_GetLootDataByIndex( item.GetSurvivalInt() );
+						int count = SURVIVAL_CountItemsInInventory( player, data.ref );
+						int count2 = data.inventorySlotCount;
+ 
+						if(data.lootType == eLootType.ATTACHMENT)
+						{
+							array<string> attachPoints = GetAttachPointsForAttachment( data.ref );
+							if(attachPoints.len() && attachPoints[0] == "sight")
+							{
+								continue;
+							};
+						};
+ 
+						if((l_w && data.lootType == eLootType.MAINWEAPON) || (l_at && data.lootType == eLootType.ATTACHMENT) || (l_e && (data.lootType == eLootType.HELMET || data.lootType == eLootType.BACKPACK || data.lootType == eLootType.INCAPSHIELD)))
+						{
+							if(SURVIVAL_IsLootAnUpgrade(player, item, data, eLootContext.GROUND))
+							{
+								Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, 0, deathbox );
+								wait 0.1;
+							};
+						}
+						else if (l_e && data.lootType == eLootType.ARMOR)
+						{
+							if(p_s)
+							{
+								int currentShields = SURVIVAL_GetPlayerShieldHealthFromArmor( player );
+								int lootShields    = GetPropSurvivalMainPropertyFromEnt( item );
+								if(currentShields < lootShields)
+								{
+									Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, PICKUP_FLAG_DONT_COUNT_TOWARD_BLACK_MARKET_QUOTA , deathbox );
+									wait 0.1;
+								};
+							}
+							else
+							{
+								if(SURVIVAL_IsLootAnUpgrade(player, item, data, eLootContext.GROUND))
+								{
+									Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, PICKUP_FLAG_DONT_COUNT_TOWARD_BLACK_MARKET_QUOTA , deathbox );
+									wait 0.1;
+								};
+							};
+						}
+						else if(l_a && data.lootType == eLootType.AMMO && ammoTypes.find(data.ref) != -1)
+						{
+							float ratio = 3;
+							if(ammoTypes.len() == 2 && ammoTypes[0] == ammoTypes[1])
+							{
+								ratio = 5;
+							};
+ 
+							if(count / count2 < ratio)
+							{
+								Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, 0, deathbox );
+								wait 0.1;
+							};
+						}
+						else if((l_h && data.lootType == eLootType.HEALTH) || (l_o && data.lootType == eLootType.ORDNANCE) || (l_g && data.lootType == eLootType.GADGET) )
+						{
+							if(count / count2 < 1)
+							{
+								Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, 0, deathbox );
+								wait 0.1;
+							};
+						};
+					};
+				};
+			};
+		};
+	};
+};
+Seer health ESP
+Code:
+if(IsValid(player) && IsAlive(player) && IsLocalClientPlayer(player))
+{
+	int draw_dis = GetCurrentPlaylistVarInt("esp_range", 3000);
+	int team = player.GetTeam();
+	array<entity> enemies = GetPlayerArrayOfEnemies(team);
+	if( GetCurrentPlaylistVarBool( "spas", false ) )
+	{
+		foreach( entity enemy in enemies )
+		{
+			if(IsValid(enemy) && enemy.IsPlayer() && IsAlive(enemy) && enemy != player)
+			{
+				bool inList = (enemy in player.p.reconScanRUIs);
+				float dis = Distance(player.GetOrigin(), enemy.GetOrigin());
+				if(!inList)
+				{
+					if(dis < draw_dis)
+					{
+						ReconScan_ShowHudForTarget(player, enemy, false );
+					};
+				}
+				else if(dis > draw_dis && inList && player.p.reconScanRUIs[enemy] != null)
+				{
+					ReconScan_RemoveHudForTarget(player, enemy);
+				};
+			}
+			else if(!IsValid(enemy) || !IsAlive(enemy))
+			{
+				if(enemy in player.p.reconScanRUIs && player.p.reconScanRUIs[enemy] != null)
+				{
+					ReconScan_RemoveHudForTarget(player, enemy);
+				};
+			};
+		};
+	}
+	else
+	{
+		foreach( entity enemy in enemies )
+		{
+			if(enemy in player.p.reconScanRUIs && player.p.reconScanRUIs[enemy] != null)
+			{
+				ReconScan_RemoveHudForTarget(player, enemy);
+			};
+		};
+	};
+};
+jzhfgvfwu is offline
+Last Active: Yesterday
+
+Add to jzhfgvfwu's Reputation Take from jzhfgvfwu's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 3rd July 2022, 07:30 AM	  #2
+04255
+UC Supporter
+
+
+04255's Avatar
+
+Join Date: Apr 2020
+Posts: 181
+Reputation: -1607
+Rep Power: 0
+04255 is infamous around these parts04255 is infamous around these parts04255 is infamous around these parts04255 is infamous around these parts04255 is infamous around these parts04255 is infamous around these parts04255 is infamous around these parts04255 is infamous around these parts04255 is infamous around these parts04255 is infamous around these parts04255 is infamous around these parts
+Points: 3,334, Level: 5
+Points: 3,334, Level: 5	Points: 3,334, Level: 5	Points: 3,334, Level: 5
+Level up: 67%, 266 Points needed
+Level up: 67%	Level up: 67%	Level up: 67%
+Activity: 2.3%
+Activity: 2.3%	Activity: 2.3%	Activity: 2.3%
+Last Achievements
+Some Apex squirrel scriptsSome Apex squirrel scriptsSome Apex squirrel scripts
+Can you make it public? I want to know how you achieved it
+GetCurrentPlaylistVarBool()
+Remote_ServerCallFunction()
+
+This seems to require a remote call game function.
+can i do it in external cheat?
+Autoloot is so cool.
+__________________
+FBI warning,
+cheat or dead
+Last edited by 04255; 3rd July 2022 at 07:32 AM.
+04255 is offline
+Last Active: 13th March 2025
+
+Add to 04255's Reputation Take from 04255's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 5th July 2022, 09:55 AM	  #3
+ILKA
+A God
+
+
+ILKA's Avatar
+
+Join Date: Aug 2016
+Location: Russia
+Posts: 185
+Reputation: 6264
+Rep Power: 259
+ILKA DEFINES UNKNOWNCHEATSILKA DEFINES UNKNOWNCHEATSILKA DEFINES UNKNOWNCHEATSILKA DEFINES UNKNOWNCHEATSILKA DEFINES UNKNOWNCHEATSILKA DEFINES UNKNOWNCHEATSILKA DEFINES UNKNOWNCHEATSILKA DEFINES UNKNOWNCHEATSILKA DEFINES UNKNOWNCHEATSILKA DEFINES UNKNOWNCHEATSILKA DEFINES UNKNOWNCHEATS
+Points: 14,803, Level: 15
+Points: 14,803, Level: 15	Points: 14,803, Level: 15	Points: 14,803, Level: 15
+Level up: 86%, 197 Points needed
+Level up: 86%	Level up: 86%	Level up: 86%
+Activity: 2.9%
+Activity: 2.9%	Activity: 2.9%	Activity: 2.9%
+Last Achievements
+Some Apex squirrel scriptsSome Apex squirrel scriptsSome Apex squirrel scripts
+Quote:
+Originally Posted by 04255 View Post
+Can you make it public? I want to know how you achieved it
+GetCurrentPlaylistVarBool()
+Remote_ServerCallFunction()
+
+This seems to require a remote call game function.
+can i do it in external cheat?
+Autoloot is so cool.
+These functions from game API
+ILKA is offline
+Last Active: 19th September 2026
+
+Add to ILKA's Reputation Take from ILKA's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 8th July 2022, 05:12 AM	  #4
+IzzyM
+Junior Member
+
+
+IzzyM's Avatar
+
+Join Date: Jun 2021
+Posts: 39
+Reputation: 506
+Rep Power: 132
+IzzyM Just broke the rep barrier: 2nd Level User!!!IzzyM Just broke the rep barrier: 2nd Level User!!!IzzyM Just broke the rep barrier: 2nd Level User!!!IzzyM Just broke the rep barrier: 2nd Level User!!!IzzyM Just broke the rep barrier: 2nd Level User!!!IzzyM Just broke the rep barrier: 2nd Level User!!!
+Points: 1,865, Level: 3
+Points: 1,865, Level: 3	Points: 1,865, Level: 3	Points: 1,865, Level: 3
+Level up: 67%, 235 Points needed
+Level up: 67%	Level up: 67%	Level up: 67%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+Last Achievements
+Some Apex squirrel scripts
+How to use it? I found squirrel, but this is just a library
+IzzyM is offline
+Last Active: 10th October 2026
+
+Add to IzzyM's Reputation Take from IzzyM's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 8th July 2022, 08:19 AM	  #5
+hitvandal
+n00bie
+
+
+hitvandal's Avatar
+
+Join Date: May 2021
+Posts: 1
+Reputation: 10
+Rep Power: 136
+hitvandal has made posts that are generally average in quality
+Points: 1, Level: 1
+Points: 1, Level: 1	Points: 1, Level: 1	Points: 1, Level: 1
+Level up: 0%, 1 Points needed
+Level up: 0%	Level up: 0%	Level up: 0%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+How to use it?
+hitvandal is offline
+Last Active: 14th April 2026
+
+Add to hitvandal's Reputation Take from hitvandal's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 20th July 2023, 05:25 AM	  #6
+crazymeme
+Posting Well
+
+
+crazymeme's Avatar
+
+Join Date: Jan 2022
+Posts: 31
+Reputation: 43
+Rep Power: 120
+crazymeme has made posts that are generally average in quality
+Points: 1,918, Level: 3
+Points: 1,918, Level: 3	Points: 1,918, Level: 3	Points: 1,918, Level: 3
+Level up: 74%, 182 Points needed
+Level up: 74%	Level up: 74%	Level up: 74%
+Activity: 2.1%
+Activity: 2.1%	Activity: 2.1%	Activity: 2.1%
+Last Achievements
+Some Apex squirrel scripts
+Quote:
+Originally Posted by jzhfgvfwu View Post
+Hello, I've decided to release some useful squirrel scripts for the apex sqvm. I'll leave figuring out how to execute your own scripts to the reader.
+
+Fullmap radar
+Code:
+local fullmap = compilestring(" (function(){
+	entity player = GetLocalClientPlayer();
+	player.EndSignal( "OnDestroy" );
+ 
+	array<var> fullMapRuis; OnThreadEnd(function() : ( fullMapRuis )
+	{
+		foreach( var ruiToDestroy in fullMapRuis )
+		{
+			Fullmap_RemoveRui(ruiToDestroy); RuiDestroyIfAlive(ruiToDestroy);
+		};
+ 
+		fullMapRuis.clear();
+	});
+ 
+	int team = player.GetTeam();
+ 
+	while(1)
+	{
+		if(IsValid(player))
+		{
+			foreach( var ruiToDestroy in fullMapRuis )
+			{
+			Fullmap_RemoveRui( ruiToDestroy );
+			RuiDestroy( ruiToDestroy );
+			};
+ 
+			fullMapRuis.clear();
+ 
+			if( Fullmap_IsVisible() == false || GetCurrentPlaylistVarBool( "exec_fullmap_uav", false ) == false )
+			{
+				wait 0.5;
+				continue;
+			};
+ 
+			array<entity> aliveEnemies = GetPlayerArrayOfEnemies_Alive(team);
+ 
+			foreach( entity enemy in aliveEnemies )
+			{
+				var fRui = FullMap_CommonAdd( $"ui/in_world_minimap_square_simple.rpak");
+				FullMap_CommonTrackEntOrigin( fRui, enemy, false );
+				RuiTrackFloat2( fRui, "zoomPos", null, RUI_TRACK_BIG_MAP_ZOOM_ANCHOR );
+				RuiTrackFloat( fRui, "zoomFactor", null, RUI_TRACK_BIG_MAP_ZOOM_SCALE );
+				RuiTrackFloat3( fRui, "objectPos", enemy, RUI_TRACK_ABSORIGIN_FOLLOW );
+				RuiTrackFloat3( fRui, "objectAngles", enemy, RUI_TRACK_EYEANGLES_FOLLOW );
+				RuiSetFloat3( fRui, "objColor", GetKeyColor( COLORID_MINIMAP_ENEMY_REF ) * ( 1.0 / 255.0 ) );
+				RuiSetFloat( fRui,"objectSize", 4.0 );
+				RuiSetImage( fRui, "iconImage",$"rui/hud/minimap/compass_icon_player");
+				Fullmap_AddRui( fRui );
+				fullMapRuis.append(fRui);
+			};
+ 
+			wait 3.0;
+			foreach( var ruiToDestroy in fullMapRuis )
+			{
+				Fullmap_RemoveRui( ruiToDestroy );
+				RuiDestroyIfAlive( ruiToDestroy );
+			};
+ 
+			fullMapRuis.clear();
+		};
+		WaitFrame();
+	};
+})() ", "cl_fm_script.nut")
+Minimap radar
+Code:
+local minimap = compilestring(" (function(){entity player = GetLocalClientPlayer();
+player.EndSignal( "OnDestroy" );
+array<var>fullMapRuis;
+ 
+OnThreadEnd(function() : ( fullMapRuis )
+{
+	foreach( var ruiToDestroy in fullMapRuis )
+	{
+		Minimap_CommonCleanup(ruiToDestroy);
+	};
+		fullMapRuis.clear();
+});
+ 
+		int team = player.GetTeam();
+ 
+		while(1)
+		{
+			if(IsValid(player))
+			{
+				foreach( var ruiToDestroy in fullMapRuis )
+				{
+					Minimap_CommonCleanup( ruiToDestroy );
+				};
+ 
+				fullMapRuis.clear();
+ 
+				if( GetCurrentPlaylistVarBool( "exec_minimap_uav", false ) == false )
+				{
+					wait 3.0;
+					continue;
+				};
+ 
+				array<entity> aliveEnemies = GetPlayerArrayOfEnemies_Alive(team);
+ 
+				foreach( entity enemy in aliveEnemies )
+				{
+					var fRui = Minimap_AddEnemyToMinimap(enemy);
+					Minimap_CommonTrackEntOrigin(fRui, enemy, true);
+					fullMapRuis.append(fRui);
+				};
+ 
+				wait 5.0;
+ 
+				foreach( var ruiToDestroy in fullMapRuis )
+				{
+					Minimap_CommonCleanup( ruiToDestroy );
+				};
+ 
+				fullMapRuis.clear();
+			};
+ 
+			WaitFrame();
+		};
+ 
+})() ", "cl_mm_scripts.nut")
+Triggerbot
+Code:
+local trigger = compilestring(" (function()
+{
+	entity player = GetLocalClientPlayer();
+	player.EndSignal( "OnDestroy" );
+	while(true)
+	{
+		if(IsValid(player) && IsAlive(player) && player.GetBleedoutState() == BS_NOT_BLEEDING_OUT && GetCurrentPlaylistVarBool( "tb", false ) )
+		{
+			entity activeWeapon = player.GetActiveWeapon( eActiveInventorySlot.mainHand );
+			if( activeWeapon &&
+			IsValid(activeWeapon) &&
+			!activeWeapon.IsReloading() &&
+			(((IsWeaponInSingleShotMode(activeWeapon) || IsWeaponInBurstMode(activeWeapon)) && activeWeapon.IsReadyToFire() == true) || IsWeaponInAutomaticMode(activeWeapon)))
+			{
+				bool bBocek = activeWeapon.GetWeaponClassName() == "mp_weapon_bow";
+				if(!bBocek && (InputIsButtonDown( MOUSE_LEFT ) || InputIsButtonDown( BUTTON_A )))
+				{
+					WaitFrame();
+					continue;
+				};
+ 
+				vector crosshairStart = player.EyePosition();
+				vector crosshairEnd = crosshairStart + player.GetViewForward() * 250000;
+				entity undercrosshair = player.GetTargetUnderCrosshair();
+				entity crosshairEnt = null;
+ 
+				if(undercrosshair == null)
+				{
+					TraceResults crosshairResults = TraceLine( crosshairStart, crosshairEnd, player, TRACE_MASK_SHOT, TRACE_COLLISION_GROUP_NONE, player );
+					crosshairEnt = crosshairResults.hitEnt;
+ 
+					if ( IsValid( crosshairEnt ) && (crosshairEnt.GetScriptName() == "gibraltar_gun_shield" || crosshairEnt.GetScriptName() == "amped_wall"))
+					{
+						var deferredTrace = DeferredTraceLine( crosshairStart, crosshairEnd, crosshairEnt, TRACE_MASK_SHOT, TRACE_COLLISION_GROUP_NONE);while ( IsDeferredTraceFinished( deferredTrace ) == false)
+						{
+							WaitFrame();
+						};
+ 
+						crosshairResults = GetDeferredTraceResult( deferredTrace );
+						crosshairEnt = crosshairResults.hitEnt;
+					};
+				}
+				else
+				{
+					crosshairEnt = undercrosshair;
+				};
+ 
+				if ( IsValid(player) &&
+				IsAlive(player) &&
+				IsValid( crosshairEnt ) &&
+				(IsFiringRangeGameMode() ||
+				IsSurvivalTraining() ||
+				((GameRules_GetGameMode() == GAMEMODE_CONTROL && (crosshairEnt.GetTeam() % 2) != (player.GetTeam() % 2)) ||
+				(GameRules_GetGameMode() != GAMEMODE_CONTROL && crosshairEnt.GetTeam() != player.GetTeam()))) &&
+				(crosshairEnt.IsPlayer() || IsTrainingDummie(crosshairEnt) || IsProwler( crosshairEnt ) || IsSpider( crosshairEnt )) )
+				{
+					if(GetCurrentPlaylistVarBool( "trigger_ignore_down", false ) == false || crosshairEnt.GetBleedoutState() == BS_NOT_BLEEDING_OUT)
+					{
+						if(bBocek && activeWeapon.GetWeaponChargeFraction() == 1.0)
+						{
+							player.ClientCommand("-attack");
+						};
+ 
+						if(!bBocek)
+						{
+							player.ClientCommand("+attack");
+							player.ClientCommand("-attack");
+						};
+					}
+				}
+			}
+		};
+ 
+		WaitFrame();
+	}
+})() ", "cl_shooting.nut")
+Item icon ESP
+Code:
+local itemRui = compilestring(" (function()
+{
+	entity player = GetLocalClientPlayer();
+	player.EndSignal( "OnDestroy" );
+	array<var> itemRuis;
+ 
+	while(1)
+	{
+		if(IsValid(player) && IsAlive(player))
+		{
+			if( GetCurrentPlaylistVarBool( "script_selection_key_20", false ) == false )
+			{
+				if(itemRuis.len())
+				{
+					foreach( var ruiToDestroy in itemRuis )
+					{
+						RuiDestroyIfAlive( ruiToDestroy );
+					};
+ 
+					itemRuis.clear();
+				};
+ 
+				wait 0.2;
+				continue;
+			};
+ 
+			array<entity> NearbyLoots = GetSurvivalLootNearbyPlayer( player, 2000, false, false, false );
+			foreach( entity loot in NearbyLoots )
+			{
+				if ( IsValid( loot ))
+				{
+					LootData lootData = SURVIVAL_Loot_GetLootDataByIndex( loot.GetSurvivalInt() );
+					LootRef lootRef = SURVIVAL_CreateLootRef( lootData, loot );
+ 
+					lootRef.count = loot.GetClipCount();
+					var farRui = null;
+ 
+					if(SURVIVAL_IsLootAnUpgrade(player, lootRef.lootEnt, lootData, eLootContext.GROUND) || lootData.lootType == eLootType.MAINWEAPON)
+					{
+						if (lootData.lootType == eLootType.MAINWEAPON)
+						{
+							farRui = CreateFullscreenRui( $"ui/loot_pickup_hint_weapon_far.rpak", -1 );
+						}
+						else
+						{
+							farRui = CreateFullscreenRui( $"ui/loot_pickup_hint_far.rpak", -1 );
+						};
+ 
+						RuiTrackFloat3( farRui, "worldPos", loot, RUI_TRACK_ABSORIGIN_FOLLOW );
+						RuiSetBool( farRui, "isFullyKitted", SURVIVAL_Weapon_IsAttachmentLocked( lootData.ref ) );
+						RuiSetBool( farRui, "isVisible", true );
+						RuiSetImage( farRui, "iconImage", lootData.hudIcon );
+						RuiSetInt( farRui, "lootTier", lootData.tier );
+						vector iconScale = lootData.lootType == eLootType.MAINWEAPON ? <1.2, 0.6, 0.0> : <0.6, 0.6, 0.0>;
+						RuiSetFloat2( farRui, "iconScale", iconScale );
+						RuiSetBool( farRui, "isPingedByUs", true );
+					};
+ 
+					if(farRui != null)
+					{
+						itemRuis.append(farRui);
+					};
+				};
+			};
+ 
+			wait 0.2;
+ 
+			foreach( var ruiToDestroy in itemRuis )
+			{
+				RuiDestroyIfAlive( ruiToDestroy ); };itemRuis.clear();
+				continue;
+		};
+ 
+		wait 0.5;
+ 
+	}
+})() ", "cl_itemrui_script.nut")
+Autoloot
+Code:
+GetCurrentPlaylistVarInt("ic8", EquipmentSlot_GetEquipmentTier( player, "incapshield" ));
+GetCurrentPlaylistVarInt("ba8", EquipmentSlot_GetEquipmentTier( player, "backpack" ));
+bool l_e = GetCurrentPlaylistVarBool( "l_e", false );
+bool l_a = GetCurrentPlaylistVarBool( "l_a", false );
+bool l_g = GetCurrentPlaylistVarBool( "l_g", false );
+bool l_h = GetCurrentPlaylistVarBool( "l_h", false );
+bool l_o = GetCurrentPlaylistVarBool( "l_o", false );
+bool l_w = GetCurrentPlaylistVarBool( "l_w", false );
+bool p_s = GetCurrentPlaylistVarBool( "p_s", false );
+bool l_at = GetCurrentPlaylistVarBool( "l_at", false );
+ 
+//Autoloot
+if ( GetCurrentPlaylistVarBool( "exec_autoloot", false ) == true )
+{
+	local ammoTypes = [];
+	foreach ( weapon in SURVIVAL_GetPrimaryWeapons( player ) )
+	{
+		string className = weapon.GetWeaponClassName();
+		if ( SURVIVAL_Loot_IsRefValid( className ) )
+		{
+			LootData data = SURVIVAL_Loot_GetLootDataByRef( className );
+			if(data.tier == eLootTier.HEIRLOOM)
+			{
+				continue;
+			};
+ 
+			ammoTypes.append(data.ammoType);
+		};
+	};
+ 
+	array<entity> loots = GetSurvivalLootNearbyPlayer( player, SURVIVAL_PICKUP_ALL_MAX_RANGE, false, false, false );
+	foreach (entity item in loots)
+	{
+		if(IsValid(item))
+		{
+			LootData data = SURVIVAL_Loot_GetLootDataByIndex( item.GetSurvivalInt() );
+			int count = SURVIVAL_CountItemsInInventory( player, data.ref );
+			int count2 = data.inventorySlotCount;
+ 
+			if(data.lootType == eLootType.ATTACHMENT)
+			{
+				array<string> attachPoints = GetAttachPointsForAttachment( data.ref );
+				if(attachPoints.len() && attachPoints[0] == "sight")
+				{
+					continue;
+				};
+			};
+ 
+			if((l_w && data.lootType == eLootType.MAINWEAPON) || (l_at && data.lootType == eLootType.ATTACHMENT) || (l_e && (data.lootType == eLootType.HELMET|| data.lootType == eLootType.BACKPACK || data.lootType == eLootType.INCAPSHIELD)))
+			{
+				if(SURVIVAL_IsLootAnUpgrade(player, item, data, eLootContext.GROUND))
+				{
+					Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, PICKUP_FLAG_DONT_COUNT_TOWARD_BLACK_MARKET_QUOTA , null );
+					wait 0.1;
+				};
+ 
+			};
+			else if (l_e && data.lootType == eLootType.ARMOR)
+			{
+				if(p_s)
+				{
+					int currentShields = SURVIVAL_GetPlayerShieldHealthFromArmor( player );
+					int lootShields    = GetPropSurvivalMainPropertyFromEnt( item );
+					if(currentShields < lootShields)
+					{
+						Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, PICKUP_FLAG_DONT_COUNT_TOWARD_BLACK_MARKET_QUOTA , null );
+						wait 0.1;
+					};
+				}
+				else
+				{
+					if(SURVIVAL_IsLootAnUpgrade(player, item, data, eLootContext.GROUND))
+					{
+						Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, PICKUP_FLAG_DONT_COUNT_TOWARD_BLACK_MARKET_QUOTA , null );
+						wait 0.1;
+					};
+				};
+			}
+			else if(l_a && data.lootType == eLootType.AMMO && ammoTypes.find(data.ref) != -1)
+			{
+				float ratio = 3;if(ammoTypes.len() == 2 && ammoTypes[0] == ammoTypes[1]){ratio = 5;};if(count / count2 < ratio)
+				{
+					Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, PICKUP_FLAG_DONT_COUNT_TOWARD_BLACK_MARKET_QUOTA , null );
+					wait 0.1;
+				};
+			}
+			else if((l_h && data.lootType == eLootType.HEALTH) || (l_o && data.lootType == eLootType.ORDNANCE) || (l_g && data.lootType == eLootType.GADGET) )
+			{
+				if(count / count2 < 1)
+				{
+					Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, PICKUP_FLAG_DONT_COUNT_TOWARD_BLACK_MARKET_QUOTA , null );
+					wait 0.1;
+				};
+			};
+		};
+	};
+ 
+	//deathboxes
+	array<entity> nearbyDeathBoxes = ArrayWithin( GetAllDeathBoxes(), player.GetOrigin(), 160 );
+	foreach ( entity deathbox in nearbyDeathBoxes )
+	{
+		if(IsValid(deathbox))
+		{
+			if(deathbox.GetLinkEntArray().len() > 0)
+			{
+				foreach (entity item in deathbox.GetLinkEntArray())
+				{
+					if(IsValid(item))
+					{
+						LootData data = SURVIVAL_Loot_GetLootDataByIndex( item.GetSurvivalInt() );
+						int count = SURVIVAL_CountItemsInInventory( player, data.ref );
+						int count2 = data.inventorySlotCount;
+ 
+						if(data.lootType == eLootType.ATTACHMENT)
+						{
+							array<string> attachPoints = GetAttachPointsForAttachment( data.ref );
+							if(attachPoints.len() && attachPoints[0] == "sight")
+							{
+								continue;
+							};
+						};
+ 
+						if((l_w && data.lootType == eLootType.MAINWEAPON) || (l_at && data.lootType == eLootType.ATTACHMENT) || (l_e && (data.lootType == eLootType.HELMET || data.lootType == eLootType.BACKPACK || data.lootType == eLootType.INCAPSHIELD)))
+						{
+							if(SURVIVAL_IsLootAnUpgrade(player, item, data, eLootContext.GROUND))
+							{
+								Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, 0, deathbox );
+								wait 0.1;
+							};
+						}
+						else if (l_e && data.lootType == eLootType.ARMOR)
+						{
+							if(p_s)
+							{
+								int currentShields = SURVIVAL_GetPlayerShieldHealthFromArmor( player );
+								int lootShields    = GetPropSurvivalMainPropertyFromEnt( item );
+								if(currentShields < lootShields)
+								{
+									Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, PICKUP_FLAG_DONT_COUNT_TOWARD_BLACK_MARKET_QUOTA , deathbox );
+									wait 0.1;
+								};
+							}
+							else
+							{
+								if(SURVIVAL_IsLootAnUpgrade(player, item, data, eLootContext.GROUND))
+								{
+									Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, PICKUP_FLAG_DONT_COUNT_TOWARD_BLACK_MARKET_QUOTA , deathbox );
+									wait 0.1;
+								};
+							};
+						}
+						else if(l_a && data.lootType == eLootType.AMMO && ammoTypes.find(data.ref) != -1)
+						{
+							float ratio = 3;
+							if(ammoTypes.len() == 2 && ammoTypes[0] == ammoTypes[1])
+							{
+								ratio = 5;
+							};
+ 
+							if(count / count2 < ratio)
+							{
+								Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, 0, deathbox );
+								wait 0.1;
+							};
+						}
+						else if((l_h && data.lootType == eLootType.HEALTH) || (l_o && data.lootType == eLootType.ORDNANCE) || (l_g && data.lootType == eLootType.GADGET) )
+						{
+							if(count / count2 < 1)
+							{
+								Remote_ServerCallFunction( "ClientCallback_PickupSurvivalItem", item, 0, deathbox );
+								wait 0.1;
+							};
+						};
+					};
+				};
+			};
+		};
+	};
+};
+Seer health ESP
+Code:
+if(IsValid(player) && IsAlive(player) && IsLocalClientPlayer(player))
+{
+	int draw_dis = GetCurrentPlaylistVarInt("esp_range", 3000);
+	int team = player.GetTeam();
+	array<entity> enemies = GetPlayerArrayOfEnemies(team);
+	if( GetCurrentPlaylistVarBool( "spas", false ) )
+	{
+		foreach( entity enemy in enemies )
+		{
+			if(IsValid(enemy) && enemy.IsPlayer() && IsAlive(enemy) && enemy != player)
+			{
+				bool inList = (enemy in player.p.reconScanRUIs);
+				float dis = Distance(player.GetOrigin(), enemy.GetOrigin());
+				if(!inList)
+				{
+					if(dis < draw_dis)
+					{
+						ReconScan_ShowHudForTarget(player, enemy, false );
+					};
+				}
+				else if(dis > draw_dis && inList && player.p.reconScanRUIs[enemy] != null)
+				{
+					ReconScan_RemoveHudForTarget(player, enemy);
+				};
+			}
+			else if(!IsValid(enemy) || !IsAlive(enemy))
+			{
+				if(enemy in player.p.reconScanRUIs && player.p.reconScanRUIs[enemy] != null)
+				{
+					ReconScan_RemoveHudForTarget(player, enemy);
+				};
+			};
+		};
+	}
+	else
+	{
+		foreach( entity enemy in enemies )
+		{
+			if(enemy in player.p.reconScanRUIs && player.p.reconScanRUIs[enemy] != null)
+			{
+				ReconScan_RemoveHudForTarget(player, enemy);
+			};
+		};
+	};
+};
+
+With the autoloot's armour loot is there a way to check if the shield is broken so you shield swap?
+
+
+crazymeme is offline
+Last Active: 5th July 2024
+
+Add to crazymeme's Reputation Take from crazymeme's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 3rd August 2023, 03:05 AM	  #7
+Yesiel1562
+Junior Member
+
+
+Yesiel1562's Avatar
+
+Join Date: Jul 2023
+Posts: 35
+Reputation: 45
+Rep Power: 83
+Yesiel1562 has made posts that are generally average in quality
+Points: 220, Level: 1
+Points: 220, Level: 1	Points: 220, Level: 1	Points: 220, Level: 1
+Level up: 55%, 180 Points needed
+Level up: 55%	Level up: 55%	Level up: 55%
+Activity: 12.2%
+Activity: 12.2%	Activity: 12.2%	Activity: 12.2%
+hey man, sorry to annoy you but how would i run this code I'm quite new to this so I'm not sure how to execute this script if you can give the main idea of the execute scripts like these it would be very helpful.
+Yesiel1562 is offline
+Last Active: 21st November 2026
+
+Add to Yesiel1562's Reputation Take from Yesiel1562's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 3rd August 2023, 06:29 AM	  #8
+naturoLP
+A God
+
+
+naturoLP's Avatar
+
+Join Date: Mar 2015
+Posts: 149
+Reputation: 1728
+Rep Power: 288
+naturoLP is Capable of creating the apocalypsenaturoLP is Capable of creating the apocalypsenaturoLP is Capable of creating the apocalypsenaturoLP is Capable of creating the apocalypsenaturoLP is Capable of creating the apocalypsenaturoLP is Capable of creating the apocalypsenaturoLP is Capable of creating the apocalypsenaturoLP is Capable of creating the apocalypsenaturoLP is Capable of creating the apocalypsenaturoLP is Capable of creating the apocalypsenaturoLP is Capable of creating the apocalypse
+Points: 11,040, Level: 13
+Points: 11,040, Level: 13	Points: 11,040, Level: 13	Points: 11,040, Level: 13
+Level up: 4%, 1,260 Points needed
+Level up: 4%	Level up: 4%	Level up: 4%
+Activity: 2.8%
+Activity: 2.8%	Activity: 2.8%	Activity: 2.8%
+Last Achievements
+Some Apex squirrel scriptsSome Apex squirrel scripts
+could someone share glow or orientation match bypass?
+
+Quote:
+Originally Posted by naturoLP View Post
+could someone share glow or orientation match bypass?
+///////////////skip orientation/tuto
+
+Code:
+bool function IsLocalPlayerExemptFromTraining()
+{
+	return true
+}
+ 
+ 
+bool function DoesPlaylistRequireTraining( string playlist )
+{
+	return false
+}
+ 
+ 
+bool function HasLocalPlayerCompletedTraining()
+{
+	return true
+}
+ 
+ 
+                               
+bool function IsLocalPlayerExemptFromNewPlayerOrientation()
+{
+	return true
+}
+ 
+ 
+bool function DoesPlaylistRequireNewPlayerOrientation( string playlist )
+{
+	return true
+}
+ 
+void function ServerCallback_SetPlaylistToOrientation() ???
+{
+	Lobby_SetSelectedPlaylist( PLAYLIST_NEW_PLAYER_ORIENTATION )
+}
+ 
+ 
+bool function HasLocalPlayerCompletedNewPlayerOrientation()
+{
+	return true
+}
+ 
+ 
+bool function DoNonlocalPlayerPartyMembersNeedToCompleteNewPlayerOrientation()
+{
+	return true
+}
+__________________
+Casual Gamer
+naturoLP is offline
+Last Active: 16th October 2026
+
+Add to naturoLP's Reputation Take from naturoLP's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 24th September 2023, 11:15 AM	  #9
+RITZKING
+n00bie
+
+
+RITZKING's Avatar
+
+Join Date: Jun 2022
+Posts: 3
+Reputation: 10
+Rep Power: 110
+RITZKING has made posts that are generally average in quality
+Points: 982, Level: 2
+Points: 982, Level: 2	Points: 982, Level: 2	Points: 982, Level: 2
+Level up: 17%, 418 Points needed
+Level up: 17%	Level up: 17%	Level up: 17%
+Activity: 12.8%
+Activity: 12.8%	Activity: 12.8%	Activity: 12.8%
+How to use these scripts anyone please help?
+RITZKING is offline
+Last Active: 26th March 2024
+
+Add to RITZKING's Reputation Take from RITZKING's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook
+
+ collapse quick replyQuick Reply
+Message:
+Remove Text Formatting
+	
+Bold
+Italic
+Underline
+	
+
+	
+	
+Insert Link
+Insert Image
+	
+Wrap [QUOTE] tags around selected text
+	
+Wrap [CODE] tags around selected text
+ 	
+Decrease Size
+Increase Size
+
+
+Options
+Quote message in reply?
+Old Thread Warning
+exclamation iconThis Thread is more than 1160 days old. It is very likely that it does not need any further discussion and thus bumping it serves no purpose.
+If you still feel it is necessary to make a new reply, you can still do so though.
+I am aware that this Thread is rather old but I still want to make a reply.
+ 
+
+collapse similar threadsSimilar Threads
+Thread	Thread Starter	Forum	Replies	Last Post
+[Release] Logitech LGHUB Lua Scripts Backup App. Never lose scripts again.	sashaatx	Call of Duty: Modern Warfare	3	2nd February 2022 10:24 AM
+[Question] is ahk scripts and other similar scripts files are detected ?	FrankoooEFC	PUBG Mobile	7	24th December 2018 12:07 PM
+[Help] Toggle Scripts On/Off & Enabling/Disabling Scripts	G.T.D.	Payday 2	0	7th May 2014 12:52 PM
+[Release] Fun Scripts 2 TONS OF SCRIPTS	zombie1004	ARMA 2 Scripting	7	5th December 2012 09:28 PM
+
+Currently Active Users Viewing This Thread: 1 (1 members and 0 guests)
+myx0146
+
+Tags
+scripts, apex, squirrel, figuring, fullmap, reader, execute, [release], leave, sqvm
+
+« Previous Thread | Next Thread »
+
+Forum Jump
+
+    Apex Legends
+
+Log Out myx0146
+
+All times are GMT -8. The time now is 10:43 PM.
+Copyright ©2000-2026, Unknowncheats™
+DMCA - View Staff
+Terms of Use - Privacy Policy - Forum Rules
+

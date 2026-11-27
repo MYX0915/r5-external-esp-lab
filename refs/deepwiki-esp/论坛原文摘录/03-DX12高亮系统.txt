@@ -1,0 +1,437 @@
+论坛页面摘录（保留英文原文；非无删节副本）
+来源：用户粘贴的页面文本。其余分页及未提供的图片不包含。［未收录］对应附件原行号。
+
+
+UnknownCheats - Leading the game hacking and cheat development scene since 2000	
+UnKnoWnCheaTs Game Hacking Portal	UnKnoWnCheaTs Game Hacking Forum – Cheats, Hacks, and Tutorials	Download Game Hacks, Cheats and Hacking Tools – UnKnoWnCheaTs	Donate to Support UnKnoWnCheaTs Game Hacking Community	User Settings and Preferences – UnKnoWnCheaTs Control Panel	Quick Access to Game Hacking Forums and Tools	Search UnKnoWnCheaTs	Join the UnKnoWnCheaTs Discord and IRC for Game Hacking Chat	Game Hacking Wiki – Tutorials and Guides on UnKnoWnCheaTs	Toggle Dark Mode
+
+Go Back	 	UnKnoWnCheaTs - Multiplayer Game Hacking and Cheats
+First-Person Shooters
+Apex Legends
+Reload this Page [Information] [DX12] Apex Legends Highlight System - Structure Analysis & Glow Activation
+Advanced Forum Search
+New Posts | New Threads
+New Posts: Last Login
+Mark All Forums Read
+［未收录：附件第 13–17 行］
+UnKnoWnCheaTs Community Rules
+
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook
+ 
+Thread Tools 	Search this Thread 	Rate Thread 
+[DX12] Apex Legends Highlight System - Structure Analysis & Glow Activation
+Old 13th August 2026, 01:13 AM	  #1
+Zedvy
+n00bie
+
+
+Zedvy's Avatar
+
+Join Date: Mar 2020
+Location: Tokyo
+Posts: 6
+Reputation: 1398
+Rep Power: 164
+Zedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slaves
+Points: 8,817, Level: 11
+Points: 8,817, Level: 11	Points: 8,817, Level: 11	Points: 8,817, Level: 11
+Level up: 11%, 983 Points needed
+Level up: 11%	Level up: 11%	Level up: 11%
+Activity: 9.1%
+Activity: 9.1%	Activity: 9.1%	Activity: 9.1%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Arrow [DX12] Apex Legends Highlight System - Structure Analysis & Glow Activation
+
+I recently came back to this game after a long break and struggled quite
+a bit with getting glow ESP working again, so I wanted to share my
+analysis results and the method that finally worked.
+
+Hope this helps someone 
+
+1. OVERVIEW
+［未收录：附件第 54–62 行］
+Table extent:
+［未收录：附件第 64–68 行］
+2. HighlightStyle (stride ［数值已隐去］)
+［未收录：附件第 70–100 行］
+3. Entity Highlight Fields
+［未收录：附件第 102–123 行］
+4. Activation Sequence
+［未收录：附件第 125–134 行］
+5. Activation Procedure
+［未收录：附件第 136 行］
+5a. Resolve the table
+［未收录：附件第 138–142 行］
+5b. Prepare a style row
+［未收录：附件第 144–161 行］
+5c. Apply to entity
+［未收录：附件第 163–177 行］
+5d. Restore on disable
+［未收录：附件第 179–189 行］
+6. Common Pitfalls
+［未收录：附件第 191–202 行］
+7. Memory Layout Reference
+［未收录：附件第 204–234 行］
+Attached Thumbnails
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation-95c0ff87-761f-4d53-b904-c5b6eaf45ec1-png  
+__________________
+Anyone who want to contact me
+［未收录：附件第 239 行］
+Last edited by Zedvy; 13th August 2026 at 01:42 AM.
+Zedvy is offline
+Last Active: 23rd November 2026
+
+Add to Zedvy's Reputation Take from Zedvy's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 13th August 2026, 02:05 AM	  #2
+TingCPP
+In love with Infractions
+
+TingCPP's Avatar
+
+Join Date: May 2018
+Posts: 1,093
+Reputation: 36036
+Rep Power: 254
+TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!TingCPP has a huge epeen!
+Recognitions
+Members who have contributed financial support towards UnKnoWnCheaTs. Donator (4)
+Points: 48,592, Level: 33
+Points: 48,592, Level: 33	Points: 48,592, Level: 33	Points: 48,592, Level: 33
+Level up: 18%, 2,808 Points needed
+Level up: 18%	Level up: 18%	Level up: 18%
+Activity: 9.4%
+Activity: 9.4%	Activity: 9.4%	Activity: 9.4%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Nothing really new.
+All of that has been discussed 100times on the reversal thread.
+
+［未收录：附件第 270–343 行］
+__________________
+
+Last edited by TingCPP; 13th August 2026 at 02:08 AM.
+TingCPP is offline
+Last Active: Today
+
+Add to TingCPP's Reputation Take from TingCPP's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 13th August 2026, 02:20 AM	  #3
+Zedvy
+n00bie
+
+
+Zedvy's Avatar
+
+Threadstarter
+Join Date: Mar 2020
+Location: Tokyo
+Posts: 6
+Reputation: 1398
+Rep Power: 164
+Zedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slaves
+Points: 8,817, Level: 11
+Points: 8,817, Level: 11	Points: 8,817, Level: 11	Points: 8,817, Level: 11
+Level up: 11%, 983 Points needed
+Level up: 11%	Level up: 11%	Level up: 11%
+Activity: 9.1%
+Activity: 9.1%	Activity: 9.1%	Activity: 9.1%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Talking
+Quote:
+Originally Posted by TingCPP View Post
+Nothing really new.
+All of that has been discussed 100times on the reversal thread.
+
+［未收录：附件第 380–453 行］
+Appreciate the additional info and structures!
+
+I actually looked through quite a few recent threads before posting, but struggled to find consolidated, up-to-date information. That’s why I decided to write this thread—to make it easier for returning devs to get back on track without digging through hundreds of old posts.
+
+［未收录：附件第 458 行］
+
+Updated my local notes with your `eHIGHLIGHT_FLAG` enums as well. Thanks again for sharing!
+__________________
+Anyone who want to contact me
+［未收录：附件第 463 行］
+Zedvy is offline
+Last Active: 23rd November 2026
+
+Add to Zedvy's Reputation Take from Zedvy's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 13th August 2026, 04:57 AM	  #4
+R7flex2
+Banned
+
+R7flex2's Avatar
+
+Join Date: Apr 2020
+Posts: 104
+Reputation: 7170
+Rep Power: 170
+R7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATS
+Points: 14,385, Level: 15
+Points: 14,385, Level: 15	Points: 14,385, Level: 15	Points: 14,385, Level: 15
+Level up: 57%, 615 Points needed
+Level up: 57%	Level up: 57%	Level up: 57%
+Activity: 2.8%
+Activity: 2.8%	Activity: 2.8%	Activity: 2.8%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+thanks you guys for sharings.
+__________________
+s4ncak starter kit
+
+R7flex2 is offline
+Last Active: 24th November 2026
+
+Add to R7flex2's Reputation Take from R7flex2's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 14th August 2026, 03:21 PM	  #5
+camxcore
+1337 H4x0!2
+
+
+camxcore's Avatar
+
+Join Date: Aug 2015
+Posts: 138
+Reputation: 4870
+Rep Power: 280
+camxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating communitycamxcore is a legend in the cheating community
+Points: 13,751, Level: 15
+Points: 13,751, Level: 15	Points: 13,751, Level: 15	Points: 13,751, Level: 15
+Level up: 11%, 1,249 Points needed
+Level up: 11%	Level up: 11%	Level up: 11%
+Activity: 2.3%
+Activity: 2.3%	Activity: 2.3%	Activity: 2.3%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Quote:
+Originally Posted by Zedvy View Post
+Appreciate the additional info and structures!
+
+I actually looked through quite a few recent threads before posting, but struggled to find consolidated, up-to-date information. That’s why I decided to write this thread—to make it easier for returning devs to get back on track without digging through hundreds of old posts.
+
+［未收录：附件第 523 行］
+
+Updated my local notes with your `eHIGHLIGHT_FLAG` enums as well. Thanks again for sharing!
+Are people just translating with the clankers or are the clankers on this website
+camxcore is offline
+Last Active: 13th November 2026
+
+Add to camxcore's Reputation Take from camxcore's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 15th August 2026, 09:03 AM	  #6
+Zedvy
+n00bie
+
+
+Zedvy's Avatar
+
+Threadstarter
+Join Date: Mar 2020
+Location: Tokyo
+Posts: 6
+Reputation: 1398
+Rep Power: 164
+Zedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slavesZedvy has made all of you their subservient e-slaves
+Points: 8,817, Level: 11
+Points: 8,817, Level: 11	Points: 8,817, Level: 11	Points: 8,817, Level: 11
+Level up: 11%, 983 Points needed
+Level up: 11%	Level up: 11%	Level up: 11%
+Activity: 9.1%
+Activity: 9.1%	Activity: 9.1%	Activity: 9.1%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Quote:
+Originally Posted by camxcore View Post
+Are people just translating with the clankers or are the clankers on this website
+Beep boop. Just a non-native using LLM to translate, but thanks for the compliment on my formatting.
+__________________
+Anyone who want to contact me
+［未收录：附件第 560 行］
+Zedvy is offline
+Last Active: 23rd November 2026
+
+Add to Zedvy's Reputation Take from Zedvy's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 15th August 2026, 11:16 AM	  #7
+R7flex2
+Banned
+
+R7flex2's Avatar
+
+Join Date: Apr 2020
+Posts: 104
+Reputation: 7170
+Rep Power: 170
+R7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATS
+Points: 14,385, Level: 15
+Points: 14,385, Level: 15	Points: 14,385, Level: 15	Points: 14,385, Level: 15
+Level up: 57%, 615 Points needed
+Level up: 57%	Level up: 57%	Level up: 57%
+Activity: 2.8%
+Activity: 2.8%	Activity: 2.8%	Activity: 2.8%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+you guys figured showing glow behind walls?
+
+i tried with squirrel script but i can't handle
+__________________
+s4ncak starter kit
+
+R7flex2 is offline
+Last Active: 24th November 2026
+
+Add to R7flex2's Reputation Take from R7flex2's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th August 2026, 05:05 AM	  #8
+IDKhadtodo
+Member
+
+
+IDKhadtodo's Avatar
+
+Join Date: May 2023
+Posts: 60
+Reputation: 1384
+Rep Power: 87
+IDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slaves
+Points: 3,956, Level: 6
+Points: 3,956, Level: 6	Points: 3,956, Level: 6	Points: 3,956, Level: 6
+Level up: 40%, 544 Points needed
+Level up: 40%	Level up: 40%	Level up: 40%
+Activity: 14.7%
+Activity: 14.7%	Activity: 14.7%	Activity: 14.7%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Quote:
+Originally Posted by R7flex2 View Post
+you guys figured showing glow behind walls?
+
+i tried with squirrel script but i can't handle
+here, the missing stuff, will you handle ig.
+［未收录：附件第 622–649 行］
+Last edited by IDKhadtodo; 16th August 2026 at 05:09 AM. Reason: code blocks
+IDKhadtodo is offline
+Last Active: 16th November 2026
+
+Add to IDKhadtodo's Reputation Take from IDKhadtodo's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th August 2026, 07:48 AM	  #9
+R7flex2
+Banned
+
+R7flex2's Avatar
+
+Join Date: Apr 2020
+Posts: 104
+Reputation: 7170
+Rep Power: 170
+R7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATSR7flex2 DEFINES UNKNOWNCHEATS
+Points: 14,385, Level: 15
+Points: 14,385, Level: 15	Points: 14,385, Level: 15	Points: 14,385, Level: 15
+Level up: 57%, 615 Points needed
+Level up: 57%	Level up: 57%	Level up: 57%
+Activity: 2.8%
+Activity: 2.8%	Activity: 2.8%	Activity: 2.8%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Quote:
+Originally Posted by IDKhadtodo View Post
+here, the missing stuff, will you handle ig.
+［未收录：附件第 678–705 行］
+thanks, buddy, i already figured that out. the last time i cheated was 4-5 years ago, and the glow system back then seemed to work better. i miss that system :/
+__________________
+s4ncak starter kit
+
+R7flex2 is offline
+Last Active: 24th November 2026
+
+Add to R7flex2's Reputation Take from R7flex2's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 16th August 2026, 12:28 PM	  #10
+IDKhadtodo
+Member
+
+
+IDKhadtodo's Avatar
+
+Join Date: May 2023
+Posts: 60
+Reputation: 1384
+Rep Power: 87
+IDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slavesIDKhadtodo has made all of you their subservient e-slaves
+Points: 3,956, Level: 6
+Points: 3,956, Level: 6	Points: 3,956, Level: 6	Points: 3,956, Level: 6
+Level up: 40%, 544 Points needed
+Level up: 40%	Level up: 40%	Level up: 40%
+Activity: 14.7%
+Activity: 14.7%	Activity: 14.7%	Activity: 14.7%
+Last Achievements
+[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation[DX12] Apex Legends Highlight System - Structure Analysis &amp; Glow Activation
+Quote:
+Originally Posted by R7flex2 View Post
+thanks, buddy, i already figured that out. the last time i cheated was 4-5 years ago, and the glow system back then seemed to work better. i miss that system :/
+ye, i miss it too
+IDKhadtodo is offline
+Last Active: 16th November 2026
+
+Add to IDKhadtodo's Reputation Take from IDKhadtodo's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook
+
+ collapse quick replyQuick Reply
+Message:
+Remove Text Formatting
+	
+Bold
+Italic
+Underline
+	
+
+	
+	
+Insert Link
+Insert Image
+	
+Wrap [QUOTE] tags around selected text
+	
+Wrap [CODE] tags around selected text
+ 	
+Decrease Size
+Increase Size
+
+
+Options
+Quote message in reply?
+Old Thread Warning
+exclamation iconThis Thread is more than 103 days old. It is very likely that it does not need any further discussion and thus bumping it serves no purpose.
+If you still feel it is necessary to make a new reply, you can still do so though.
+I am aware that this Thread is rather old but I still want to make a reply.
+ 
+
+collapse similar threadsSimilar Threads
+Thread	Thread Starter	Forum	Replies	Last Post
+[Help] Apex Legends DMA Dump — Can't Find Highlight Offsets	GmagGig	Apex Legends	1	26th June 2025 03:38 AM
+
+Currently Active Users Viewing This Thread: 1 (1 members and 0 guests)
+［未收录：附件第 781–782 行］
+Tags
+table, ［数值已隐去］, selector, count, highlight, style, ［数值已隐去］, makes, parity, fade
+
+« Previous Thread | Next Thread »
+
+Forum Jump
+
+    Apex Legends
+
+Log Out ［账号已隐去］
+
+All times are GMT -8. The time now is 10:45 PM.
+Copyright ©2000-2026, Unknowncheats™
+DMCA - View Staff
+Terms of Use - Privacy Policy - Forum Rules

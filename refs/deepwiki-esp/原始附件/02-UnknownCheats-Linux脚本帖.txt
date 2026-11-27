@@ -1,0 +1,674 @@
+
+UnknownCheats - Leading the game hacking and cheat development scene since 2000	
+UnKnoWnCheaTs Game Hacking Portal	UnKnoWnCheaTs Game Hacking Forum – Cheats, Hacks, and Tutorials	Download Game Hacks, Cheats and Hacking Tools – UnKnoWnCheaTs	Donate to Support UnKnoWnCheaTs Game Hacking Community	User Settings and Preferences – UnKnoWnCheaTs Control Panel	Quick Access to Game Hacking Forums and Tools	Search UnKnoWnCheaTs	Join the UnKnoWnCheaTs Discord and IRC for Game Hacking Chat	Game Hacking Wiki – Tutorials and Guides on UnKnoWnCheaTs	Toggle Dark Mode
+
+Go Back	 	UnKnoWnCheaTs - Multiplayer Game Hacking and Cheats
+First-Person Shooters
+Apex Legends
+Reload this Page [Source] modify squirrel script (Linux)
+Advanced Forum Search
+New Posts | New Threads
+New Posts: Last Login
+Mark All Forums Read
+Total Posts: 4
+Threads Started: 1
+Reputation: 10
+Last Login: Yesterday at 11:46 PM
+Private Messages: Unread 0, Total 0 (0% full)
+UnKnoWnCheaTs Community Rules
+
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook	
+Page 1 of 6	1	2	3	4	5	>	Last »	
+ 
+Thread Tools 	Search this Thread 	Rate Thread 
+modify squirrel script (Linux)
+Old 5th February 2023, 12:35 AM	  #1
+B4xa1oIqxlzpEsk
+n00bie
+
+
+B4xa1oIqxlzpEsk's Avatar
+
+Join Date: Feb 2023
+Posts: 4
+Reputation: 441
+Rep Power: 93
+B4xa1oIqxlzpEsk has learned Aimbot is no longer a friend on AOL.B4xa1oIqxlzpEsk has learned Aimbot is no longer a friend on AOL.B4xa1oIqxlzpEsk has learned Aimbot is no longer a friend on AOL.B4xa1oIqxlzpEsk has learned Aimbot is no longer a friend on AOL.B4xa1oIqxlzpEsk has learned Aimbot is no longer a friend on AOL.
+Points: 825, Level: 1
+Points: 825, Level: 1	Points: 825, Level: 1	Points: 825, Level: 1
+Level up: 85%, 75 Points needed
+Level up: 85%	Level up: 85%	Level up: 85%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+modify squirrel script (Linux)
+[Source]
+https://github.com/E93S6mMety1b0H97/...squirrelscript
+
+[Features]
+tutorial bypass
+
+(original -> Some Apex squirrel scripts)
+fullmap radar
+minimap radar
+item icon ESP
+seer health ESP
+autoloot
+
+https://vimeo.com/795981518
+Last edited by 33c0c3; 5th February 2023 at 03:03 PM.
+B4xa1oIqxlzpEsk is offline
+Last Active: 22nd February 2023
+
+Add to B4xa1oIqxlzpEsk's Reputation Take from B4xa1oIqxlzpEsk's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 5th February 2023, 01:45 PM	  #2
+33c0c3
+
+33c0c3's Avatar
+
+Join Date: Apr 2020
+Posts: 1,048
+Reputation: 47637
+Rep Power: 219
+33c0c3 has a huge epeen!33c0c3 has a huge epeen!33c0c3 has a huge epeen!33c0c3 has a huge epeen!33c0c3 has a huge epeen!33c0c3 has a huge epeen!33c0c3 has a huge epeen!33c0c3 has a huge epeen!33c0c3 has a huge epeen!33c0c3 has a huge epeen!33c0c3 has a huge epeen!
+Recognitions
+Award symbolizing a retired staff member who dedicated a notable amount of time and effort to their past staff position. Former Staff
+The UC Member of the Month award is a prestigious award given to a single community member on a monthly basis. Based on a vote from community members, the award is given to the forum member that has shown exemplary achievement and potential in the UnKnoWnCheaTs community, and has shown great commitment to upholding the principles upon which UnKnoWnCheaTs stands for. A member who has been awarded the Member of the Month award has been distinguished as an asset to the UnKnoWnCheaTs community. Member of the Month (1)
+Members who have contributed financial support towards UnKnoWnCheaTs. Donator (2)
+Points: 71,955, Level: 39
+Points: 71,955, Level: 39	Points: 71,955, Level: 39	Points: 71,955, Level: 39
+Level up: 43%, 2,345 Points needed
+Level up: 43%	Level up: 43%	Level up: 43%
+Activity: 5.0%
+Activity: 5.0%	Activity: 5.0%	Activity: 5.0%
+Last Achievements
+modify squirrel script (Linux)modify squirrel script (Linux)modify squirrel script (Linux)
+Thank you for the share! However, your link was edited out, as it contains a direct download link to a set of binaries that are not approved. Please upload them to UCDownloads or remove them from your GitHub repo. Thank you for your understanding.
+@B4xa1oIqxlzpEsk I added the link back to your post. Thank you for doing that 
+__________________
+
+
+	This image has been resized. Click this bar to view the full image. The original image is sized 1083x17.
+
+Last edited by 33c0c3; 5th February 2023 at 03:03 PM.
+33c0c3 is offline
+Last Active: 15th November 2026
+
+Add to 33c0c3's Reputation Take from 33c0c3's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 5th February 2023, 05:51 PM	  #3
+850639946
+Junior Member
+
+
+850639946's Avatar
+
+Join Date: Jan 2016
+Posts: 43
+Reputation: 117
+Rep Power: 266
+850639946 is officially drafted by UC850639946 is officially drafted by UC
+Points: 8,364, Level: 10
+Points: 8,364, Level: 10	Points: 8,364, Level: 10	Points: 8,364, Level: 10
+Level up: 70%, 336 Points needed
+Level up: 70%	Level up: 70%	Level up: 70%
+Activity: 2.5%
+Activity: 2.5%	Activity: 2.5%	Activity: 2.5%
+Last Achievements
+modify squirrel script (Linux)modify squirrel script (Linux)modify squirrel script (Linux)
++rep, cool, that helps alot
+I am struggling at how to detour/hook game engine
+
+I am so confused, it is Linux only and replace files without any anticheat bypass, and Windows requires a different approach, is it because EAC works differently on Windows and Linux?
+Last edited by 850639946; 5th February 2023 at 06:53 PM.
+850639946 is offline
+Last Active: Today
+
+Add to 850639946's Reputation Take from 850639946's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 5th February 2023, 07:00 PM	  #4
+dekoda
+Difficulty = fun
+
+dekoda's Avatar
+
+Join Date: Aug 2020
+Location: dominican republic
+Posts: 170
+Reputation: 6092
+Rep Power: 161
+dekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATS
+Points: 13,232, Level: 14
+Points: 13,232, Level: 14	Points: 13,232, Level: 14	Points: 13,232, Level: 14
+Level up: 72%, 368 Points needed
+Level up: 72%	Level up: 72%	Level up: 72%
+Activity: 2.7%
+Activity: 2.7%	Activity: 2.7%	Activity: 2.7%
+Last Achievements
+modify squirrel script (Linux)modify squirrel script (Linux)
++rep, nice
+Last edited by dekoda; 5th February 2023 at 07:19 PM.
+dekoda is offline
+Last Active: 10th October 2026
+
+Add to dekoda's Reputation Take from dekoda's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 5th February 2023, 09:02 PM	  #5
+hiro0542
+Senior Member
+
+
+hiro0542's Avatar
+
+Join Date: Feb 2021
+Location: Unknown
+Posts: 56
+Reputation: 3051
+Rep Power: 145
+hiro0542 is a legend in the cheating communityhiro0542 is a legend in the cheating communityhiro0542 is a legend in the cheating communityhiro0542 is a legend in the cheating communityhiro0542 is a legend in the cheating communityhiro0542 is a legend in the cheating communityhiro0542 is a legend in the cheating communityhiro0542 is a legend in the cheating communityhiro0542 is a legend in the cheating communityhiro0542 is a legend in the cheating communityhiro0542 is a legend in the cheating community
+Points: 7,168, Level: 9
+Points: 7,168, Level: 9	Points: 7,168, Level: 9	Points: 7,168, Level: 9
+Level up: 61%, 432 Points needed
+Level up: 61%	Level up: 61%	Level up: 61%
+Activity: 2.0%
+Activity: 2.0%	Activity: 2.0%	Activity: 2.0%
+Last Achievements
+modify squirrel script (Linux)
++rep
+I got this working on Windows.
+Thanks for the custom script tutorial!
+hiro0542 is offline
+Last Active: 6th January 2026
+
+Add to hiro0542's Reputation Take from hiro0542's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 6th February 2023, 12:26 AM	  #6
+qingchan
+Senior Member
+
+
+qingchan's Avatar
+
+Join Date: Aug 2022
+Posts: 85
+Reputation: 8
+Rep Power: 0
+qingchan has a near-average in quality posting ability
+Points: 3,142, Level: 5
+Points: 3,142, Level: 5	Points: 3,142, Level: 5	Points: 3,142, Level: 5
+Level up: 43%, 458 Points needed
+Level up: 43%	Level up: 43%	Level up: 43%
+Activity: 6.7%
+Activity: 6.7%	Activity: 6.7%	Activity: 6.7%
+Last Achievements
+modify squirrel script (Linux)modify squirrel script (Linux)modify squirrel script (Linux)
+Hello, may I ask you how to use this script in Windows? Thx
+qingchan is offline
+Last Active: 20th November 2026
+
+Add to qingchan's Reputation Take from qingchan's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 6th February 2023, 12:53 AM	  #7
+L1beration
+h4x0!2
+
+
+L1beration's Avatar
+
+Join Date: Feb 2022
+Posts: 103
+Reputation: 2025
+Rep Power: 119
+L1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating community
+Points: 6,252, Level: 8
+Points: 6,252, Level: 8	Points: 6,252, Level: 8	Points: 6,252, Level: 8
+Level up: 78%, 248 Points needed
+Level up: 78%	Level up: 78%	Level up: 78%
+Activity: 5.0%
+Activity: 5.0%	Activity: 5.0%	Activity: 5.0%
+Last Achievements
+modify squirrel script (Linux)modify squirrel script (Linux)
+I wonder how secure such scripts are, after all, there are no anti-cheat measures by directly replacing files.
+L1beration is offline
+Last Active: Today
+
+Add to L1beration's Reputation Take from L1beration's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 6th February 2023, 02:16 AM	  #8
+LRKT
+Super H4x0r
+
+
+LRKT's Avatar
+
+Join Date: Nov 2021
+Posts: 322
+Reputation: 604
+Rep Power: 127
+LRKT has Private Hacks You Want!LRKT has Private Hacks You Want!LRKT has Private Hacks You Want!LRKT has Private Hacks You Want!LRKT has Private Hacks You Want!LRKT has Private Hacks You Want!
+Points: 3,360, Level: 5
+Points: 3,360, Level: 5	Points: 3,360, Level: 5	Points: 3,360, Level: 5
+Level up: 70%, 240 Points needed
+Level up: 70%	Level up: 70%	Level up: 70%
+Activity: 2.1%
+Activity: 2.1%	Activity: 2.1%	Activity: 2.1%
+Last Achievements
+modify squirrel script (Linux)
+attached video shows a silentaim .is it from another cheat?
+LRKT is offline
+Last Active: 13th October 2026
+
+Add to LRKT's Reputation Take from LRKT's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 6th February 2023, 03:50 AM	  #9
+XianThirteen
+Junior Member
+
+
+XianThirteen's Avatar
+
+Join Date: Jul 2018
+Posts: 36
+Reputation: 856
+Rep Power: 204
+XianThirteen is a pure evil cheating machine - envied by mostXianThirteen is a pure evil cheating machine - envied by mostXianThirteen is a pure evil cheating machine - envied by mostXianThirteen is a pure evil cheating machine - envied by mostXianThirteen is a pure evil cheating machine - envied by mostXianThirteen is a pure evil cheating machine - envied by mostXianThirteen is a pure evil cheating machine - envied by most
+Points: 4,626, Level: 7
+Points: 4,626, Level: 7	Points: 4,626, Level: 7	Points: 4,626, Level: 7
+Level up: 14%, 774 Points needed
+Level up: 14%	Level up: 14%	Level up: 14%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+Last Achievements
+modify squirrel script (Linux)modify squirrel script (Linux)
++rep
+I got this working on Windows,too.
+XianThirteen is offline
+Last Active: 23rd August 2023
+
+Add to XianThirteen's Reputation Take from XianThirteen's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 6th February 2023, 04:32 AM	  #10
+L1beration
+h4x0!2
+
+
+L1beration's Avatar
+
+Join Date: Feb 2022
+Posts: 103
+Reputation: 2025
+Rep Power: 119
+L1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating communityL1beration is a legend in the cheating community
+Points: 6,252, Level: 8
+Points: 6,252, Level: 8	Points: 6,252, Level: 8	Points: 6,252, Level: 8
+Level up: 78%, 248 Points needed
+Level up: 78%	Level up: 78%	Level up: 78%
+Activity: 5.0%
+Activity: 5.0%	Activity: 5.0%	Activity: 5.0%
+Last Achievements
+modify squirrel script (Linux)modify squirrel script (Linux)
+Quote:
+Originally Posted by 850639946 View Post
++rep, cool, that helps alot
+I am struggling at how to detour/hook game engine
+
+I am so confused, it is Linux only and replace files without any anticheat bypass, and Windows requires a different approach, is it because EAC works differently on Windows and Linux?
+Linux does not validate files, so you can replace them directly, but Windows will prompt you to fail to validate files
+L1beration is offline
+Last Active: Today
+
+Add to L1beration's Reputation Take from L1beration's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 6th February 2023, 05:14 AM	  #11
+wanyin520
+n00bie
+
+
+wanyin520's Avatar
+
+Join Date: Feb 2023
+Posts: 9
+Reputation: 10
+Rep Power: 93
+wanyin520 has made posts that are generally average in quality
+Points: 119, Level: 1
+Points: 119, Level: 1	Points: 119, Level: 1	Points: 119, Level: 1
+Level up: 30%, 281 Points needed
+Level up: 30%	Level up: 30%	Level up: 30%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+Hello, I want to ask which of the two files generated after repackaging is renamed as' englishclient '. After repackaging, I have two files, one is 91kb and the other is 83836kb
+
+i got it thanks
+wanyin520 is offline
+Last Active: 20th October 2026
+
+Add to wanyin520's Reputation Take from wanyin520's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 6th February 2023, 06:53 AM	  #12
+dekoda
+Difficulty = fun
+
+dekoda's Avatar
+
+Join Date: Aug 2020
+Location: dominican republic
+Posts: 170
+Reputation: 6092
+Rep Power: 161
+dekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATSdekoda DEFINES UNKNOWNCHEATS
+Points: 13,232, Level: 14
+Points: 13,232, Level: 14	Points: 13,232, Level: 14	Points: 13,232, Level: 14
+Level up: 72%, 368 Points needed
+Level up: 72%	Level up: 72%	Level up: 72%
+Activity: 2.7%
+Activity: 2.7%	Activity: 2.7%	Activity: 2.7%
+Last Achievements
+modify squirrel script (Linux)modify squirrel script (Linux)
+Quote:
+Originally Posted by L1beration View Post
+I wonder how secure such scripts are, after all, there are no anti-cheat measures by directly replacing files.
+For now it's safe, but next season it won't work anymore version 2.0 of the game will come, including the new game engine anti-cheat etc.
+dekoda is offline
+Last Active: 10th October 2026
+
+Add to dekoda's Reputation Take from dekoda's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 6th February 2023, 12:53 PM	  #13
+CARDANA
+Junior Member
+
+
+CARDANA's Avatar
+
+Join Date: Jul 2020
+Posts: 40
+Reputation: 541
+Rep Power: 155
+CARDANA has Made tutorials for hackingCARDANA has Made tutorials for hackingCARDANA has Made tutorials for hackingCARDANA has Made tutorials for hackingCARDANA has Made tutorials for hackingCARDANA has Made tutorials for hacking
+Points: 4,909, Level: 7
+Points: 4,909, Level: 7	Points: 4,909, Level: 7	Points: 4,909, Level: 7
+Level up: 46%, 491 Points needed
+Level up: 46%	Level up: 46%	Level up: 46%
+Activity: 3.2%
+Activity: 3.2%	Activity: 3.2%	Activity: 3.2%
+Last Achievements
+modify squirrel script (Linux)modify squirrel script (Linux)
+Quote:
+Originally Posted by wanyin520 View Post
+Hello, I want to ask which of the two files generated after repackaging is renamed as' englishclient '. After repackaging, I have two files, one is 91kb and the other is 83836kb
+
+i got it thanks
+I've placed the 91KB file as "englischclient_frontend.bsp.pak000_dir.vpk" and the other one as "client_frontend.bsp.pak000_000.vpk", but even if I switch them around, apex still crashes right after the start or I get an error with something like "sh_player is not an int".
+How did it work for you?
+
+#edit
+Nvm got it working somehow
+Last edited by BlackMax97; 6th February 2023 at 02:41 PM. Reason: Restored by BlackMax97
+CARDANA is offline
+Last Active: 11th February 2026
+
+Add to CARDANA's Reputation Take from CARDANA's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 6th February 2023, 07:41 PM	  #14
+robyanu26
+Hacker Supreme
+
+
+robyanu26's Avatar
+
+Join Date: Oct 2021
+Location: F2P FPS
+Posts: 234
+Reputation: 2693
+Rep Power: 129
+robyanu26 is a legend in the cheating communityrobyanu26 is a legend in the cheating communityrobyanu26 is a legend in the cheating communityrobyanu26 is a legend in the cheating communityrobyanu26 is a legend in the cheating communityrobyanu26 is a legend in the cheating communityrobyanu26 is a legend in the cheating communityrobyanu26 is a legend in the cheating communityrobyanu26 is a legend in the cheating communityrobyanu26 is a legend in the cheating communityrobyanu26 is a legend in the cheating community
+Points: 6,148, Level: 8
+Points: 6,148, Level: 8	Points: 6,148, Level: 8	Points: 6,148, Level: 8
+Level up: 68%, 352 Points needed
+Level up: 68%	Level up: 68%	Level up: 68%
+Activity: 4.0%
+Activity: 4.0%	Activity: 4.0%	Activity: 4.0%
+Last Achievements
+modify squirrel script (Linux)
+Now Japanese cheaters made UC a Turkey forum lol
+__________________
+DCBANNED!
+robyanu26 is offline
+Last Active: 29th June 2024
+
+Add to robyanu26's Reputation Take from robyanu26's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 6th February 2023, 09:29 PM	  #15
+VALLAK
+Banned
+
+VALLAK's Avatar
+
+Join Date: Dec 2020
+Location: K0N0H4
+Posts: 163
+Reputation: 1776
+Rep Power: 148
+VALLAK is Capable of creating the apocalypseVALLAK is Capable of creating the apocalypseVALLAK is Capable of creating the apocalypseVALLAK is Capable of creating the apocalypseVALLAK is Capable of creating the apocalypseVALLAK is Capable of creating the apocalypseVALLAK is Capable of creating the apocalypseVALLAK is Capable of creating the apocalypseVALLAK is Capable of creating the apocalypseVALLAK is Capable of creating the apocalypseVALLAK is Capable of creating the apocalypse
+Points: 9,292, Level: 11
+Points: 9,292, Level: 11	Points: 9,292, Level: 11	Points: 9,292, Level: 11
+Level up: 54%, 508 Points needed
+Level up: 54%	Level up: 54%	Level up: 54%
+Activity: 2.4%
+Activity: 2.4%	Activity: 2.4%	Activity: 2.4%
+Last Achievements
+modify squirrel script (Linux)modify squirrel script (Linux)modify squirrel script (Linux)
+working for windows
+__________________
+OLD PROJECT https://www.unknowncheats.me/forum/a...ow-aimbot.html
+
+E993
+VALLAK is offline
+Last Active: Today
+
+Add to VALLAK's Reputation Take from VALLAK's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 6th February 2023, 11:56 PM	  #16
+ParkInHo
+n00bie
+
+
+ParkInHo's Avatar
+
+Join Date: Jun 2021
+Posts: 1
+Reputation: 10
+Rep Power: 132
+ParkInHo has made posts that are generally average in quality
+Points: 1, Level: 1
+Points: 1, Level: 1	Points: 1, Level: 1	Points: 1, Level: 1
+Level up: 0%, 1 Points needed
+Level up: 0%	Level up: 0%	Level up: 0%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+2 vpk files
+There are 2 vpk files, how should I rename them?
+ParkInHo is offline
+Last Active: 19th February 2023
+
+Add to ParkInHo's Reputation Take from ParkInHo's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 7th February 2023, 04:01 AM	  #17
+satanaja
+Ban Evasion / Violation - Rule #12
+
+satanaja's Avatar
+
+Join Date: Nov 2022
+Posts: 7
+Reputation: 10
+Rep Power: 0
+satanaja has made posts that are generally average in quality
+Points: 234, Level: 1
+Points: 234, Level: 1	Points: 234, Level: 1	Points: 234, Level: 1
+Level up: 59%, 166 Points needed
+Level up: 59%	Level up: 59%	Level up: 59%
+Activity: 0%
+Activity: 0%	Activity: 0%	Activity: 0%
+im new in here someone may teach me how to use it ?
+satanaja is offline
+Last Active: 7th April 2023
+
+Add to satanaja's Reputation Take from satanaja's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 7th February 2023, 06:05 AM	  #18
+rosishelmi
+Senior Member
+
+
+rosishelmi's Avatar
+
+Join Date: Apr 2014
+Posts: 78
+Reputation: 165
+Rep Power: 308
+rosishelmi is known to create posts excellent in qualityrosishelmi is known to create posts excellent in quality
+Points: 8,249, Level: 10
+Points: 8,249, Level: 10	Points: 8,249, Level: 10	Points: 8,249, Level: 10
+Level up: 59%, 451 Points needed
+Level up: 59%	Level up: 59%	Level up: 59%
+Activity: 5.9%
+Activity: 5.9%	Activity: 5.9%	Activity: 5.9%
+Last Achievements
+modify squirrel script (Linux)modify squirrel script (Linux)modify squirrel script (Linux)
+my games wont open after move 2 vpk file to apex vpk directory
+
+Quote:
+Originally Posted by CARDANA View Post
+I've placed the 91KB file as "englischclient_frontend.bsp.pak000_dir.vpk" and the other one as "client_frontend.bsp.pak000_000.vpk", but even if I switch them around, apex still crashes right after the start or I get an error with something like "sh_player is not an int".
+How did it work for you?
+
+#edit
+Nvm got it working somehow
+can you tell me how to make it work? I did same like you but the game wont open after eac show up
+rosishelmi is offline
+Last Active: 9th October 2026
+
+Add to rosishelmi's Reputation Take from rosishelmi's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 7th February 2023, 07:21 AM	  #19
+CARDANA
+Junior Member
+
+
+CARDANA's Avatar
+
+Join Date: Jul 2020
+Posts: 40
+Reputation: 541
+Rep Power: 155
+CARDANA has Made tutorials for hackingCARDANA has Made tutorials for hackingCARDANA has Made tutorials for hackingCARDANA has Made tutorials for hackingCARDANA has Made tutorials for hackingCARDANA has Made tutorials for hacking
+Points: 4,909, Level: 7
+Points: 4,909, Level: 7	Points: 4,909, Level: 7	Points: 4,909, Level: 7
+Level up: 46%, 491 Points needed
+Level up: 46%	Level up: 46%	Level up: 46%
+Activity: 3.2%
+Activity: 3.2%	Activity: 3.2%	Activity: 3.2%
+Last Achievements
+modify squirrel script (Linux)modify squirrel script (Linux)
+Quote:
+Originally Posted by rosishelmi View Post
+my games wont open after move 2 vpk file to apex vpk directory
+
+
+
+can you tell me how to make it work? I did same like you but the game wont open after eac show up
+I just followed this tutorial
+CARDANA is offline
+Last Active: 11th February 2026
+
+Add to CARDANA's Reputation Take from CARDANA's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Old 7th February 2023, 07:59 AM	  #20
+rosishelmi
+Senior Member
+
+
+rosishelmi's Avatar
+
+Join Date: Apr 2014
+Posts: 78
+Reputation: 165
+Rep Power: 308
+rosishelmi is known to create posts excellent in qualityrosishelmi is known to create posts excellent in quality
+Points: 8,249, Level: 10
+Points: 8,249, Level: 10	Points: 8,249, Level: 10	Points: 8,249, Level: 10
+Level up: 59%, 451 Points needed
+Level up: 59%	Level up: 59%	Level up: 59%
+Activity: 5.9%
+Activity: 5.9%	Activity: 5.9%	Activity: 5.9%
+Last Achievements
+modify squirrel script (Linux)modify squirrel script (Linux)modify squirrel script (Linux)
+Quote:
+Originally Posted by CARDANA View Post
+I just followed this tutorial
+Thanks now working flawlesly
+rosishelmi is offline
+Last Active: 9th October 2026
+
+Add to rosishelmi's Reputation Take from rosishelmi's reputation. Report Post Reply With Quote Multi-Quote This Message Quick reply to this message
+ 
+Reply Submit Thread to Reddit RedditSubmit Thread to Twitter TwitterSubmit Thread to Facebook Facebook	
+Page 1 of 6	1	2	3	4	5	>	Last »	
+
+ collapse quick replyQuick Reply
+Message:
+Remove Text Formatting
+	
+Bold
+Italic
+Underline
+	
+
+	
+	
+Insert Link
+Insert Image
+	
+Wrap [QUOTE] tags around selected text
+	
+Wrap [CODE] tags around selected text
+ 	
+Decrease Size
+Increase Size
+
+
+Options
+Quote message in reply?
+Old Thread Warning
+exclamation iconThis Thread is more than 1319 days old. It is very likely that it does not need any further discussion and thus bumping it serves no purpose.
+If you still feel it is necessary to make a new reply, you can still do so though.
+I am aware that this Thread is rather old but I still want to make a reply.
+ 
+
+collapse similar threadsSimilar Threads
+Thread	Thread Starter	Forum	Replies	Last Post
+[Release] Some Apex squirrel scripts	jzhfgvfwu	Apex Legends	8	24th September 2023 11:15 AM
+[Release] [Linux] External Radar for Apex Linux	Blastradius	Apex Legends	17	6th April 2022 02:30 AM
+[Question] Windows or Linux? Game Hacking on Linux?	Bonnelli	Forum General	5	5th June 2020 02:21 AM
+[Release] [Linux] Ares - Example linux base	aphu	CS:GO Releases	22	22nd February 2017 09:10 AM
+
+Currently Active Users Viewing This Thread: 1 (1 members and 0 guests)
+myx0146
+
+Tags
+squirrel, esp, radar, [source], [video], autoloot, health, seer, icon, item
+
+« Previous Thread | Next Thread »
+
+Forum Jump
+
+    Apex Legends
+
+Log Out myx0146
+
+All times are GMT -8. The time now is 10:43 PM.
+Copyright ©2000-2026, Unknowncheats™
+DMCA - View Staff
+Terms of Use - Privacy Policy - Forum Rules
