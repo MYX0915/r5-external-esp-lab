@@ -6668,3 +6668,115 @@ if (g_teamBits  != -1) MemWrite(e + 0x1E4, &g_teamBits,  4);   /* 可选 */
 [ ] glowdump <row>        → 确认行内 functionBits / Flags / DrawFunc 原生值
 [ ] 按 121.4 判据做单变量实验
 ```
+
+
+---
+
+## 123. 验证协议固化 + DT 表管不到的两个卡点（2026-11-27 15:24）
+
+### 123.1 偏移层面的结论（已闭环）
+
+```
+✅ DT 表是比 UC 第三方帖子更权威的第一手依据
+✅ 本 build 的 DT_HighlightSettings 没有 selector 字段
+✅ 实体侧入口 = +0x2A0 m_highlightGenericContexts[0] + +0x2A8 focused bit0
+✅ 我们的写序列与 DT 定义完全一致
+✅ UC 帖的 +0x294 selector 属于旧版本/其他构建
+✅ 混淆来源：同数值不同基址（DT_Local 的 0x2A0 是重力字段）
+```
+
+**偏移不确定性已排除，剩下的全是实测。**
+
+### 123.2 但 DT 表只能证明"结构对不对"
+
+DT 表管不到两个独立卡点：
+
+**卡点 A：渲染收集队列的实体类型硬过滤**
+
+```
+引擎可能在收集高亮目标时就按实体类型过滤掉了
+（假人、loot、载具是否被硬编码排除在高亮队列外）
+→ 这种情况下字段写得再对也不进渲染队列
+```
+
+**卡点 B：样式行的 DrawFunc / Flags / farFadeDist**
+
+```
+这三个字段决定"画不画"，与实体侧无关
+→ 已按整行写入处理（glowrow），但生效与否要实测
+```
+
+```
+结构正确 = 必要条件，不是充分条件
+最终判据只有画面
+```
+
+### 123.3 验证优先级（三步，已固化成脚本）
+
+新增 `inject-kit/glowtest.ps1`，把流程自动化：
+
+```powershell
+cd "E:\Users\MYX\Desktop\test-game\inject-kit"
+.\glowtest.ps1              # 全部三步
+.\glowtest.ps1 -Step 1      # 只做第 1 步
+```
+
+**第 1 步：队伍字段原生值**
+
+```
+glowfields <dummy_ent>
+  → 重点看 0x1D4 (m_highlightTeamIndex) 和 0x1E4 (m_highlightTeamBits)
+  → 非零 ⇒ 队伍过滤是卡点之一
+glowdump 50
+  → 看行 50 的原生 functionBits / Flags / DrawFunc
+glowfind
+  → 找可用的空闲行
+```
+
+**第 2 步：单实体高亮（严格单变量）**
+
+```
+1. 挑空闲行（glowfind），克隆 row50（继承半径 64 + 绘制位）
+2. glowrow <row> 0 0 1     ← 纯蓝，避免和原生高亮撞色
+3. glowteam 0 0            ← 解除队伍过滤（可选）
+4. 只对 1 个假人写四步：
+     +0x2A0 contexts[0] = row
+     +0x2A8 focused     = 1
+     +0x2AC fadeDuration= 1.0f
+     +0x2B4 parity     ^= 1
+5. 其余假人全部不动
+```
+
+**第 3 步：确认自动修复逻辑**
+
+```
+切换训练场 / 重置回合
+观察日志是否出现 glowrow reclaimed, re-applied
+```
+
+### 123.4 判据（缺一不可）
+
+```
+□ 蓝色剪影出现在 overlay 框住的【同一个假人】身上
+□ 颜色是纯蓝（不是原生橙/红/黄）
+□ 关闭后立即消失
+□ 换另一个假人重复，结果一致
+```
+
+### 123.5 三种结果对应的下一步
+
+| 结果 | 含义 | 下一步 |
+|---|---|---|
+| 全满足 | 高亮真正跑通 | 进对局验证距离/墙后 |
+| 剪影出现但不重合 | 位置对应关系有问题 | 查实体列表与实际模型的对应 |
+| 完全没有剪影 | 卡点 A 或 B 之一 | A：试写具体玩家而非假人；B：glowdump 对比行字段 |
+
+### 123.6 脚本前置条件
+
+```
+· 已重启并映射新驱动（kmaplog entry 计数 = 1）
+· Apex 已进入训练场
+· 管理员 PowerShell
+```
+
+脚本会自动检查这三项，不符合直接报错退出，不会发无效请求。
