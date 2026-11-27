@@ -6327,3 +6327,125 @@ Apex 沿用至今。索引顺序由模型文件定义，模型资源没重做过
 [ ] 命中后 bonedump 验证身高比例
 [ ] 若 stride 0x30/0x40 都不命中，试 0x20 / 0x48 / 0x60
 ```
+
+
+---
+
+## 120. 实体端四步序列的不确定项 + 样式行运行时校验（2026-11-27 15:12）
+
+### 120.1 帖子给的四步（实体端，不是表行）
+
+UC 帖明确：**只改表行不够，实体侧必须做四步**，缺一不可。
+
+```
+entity +0x294 = rowIndex;   // style selector，渲染器真正读取的
+entity +0x295 = rowIndex;   // genericContexts[0]
+entity +0x29D |= 1;         // focusedMask bit0
+entity +0x2A8 ^= 1;         // fadeParity 翻转（不能写死常数）
+```
+
+两个致命提醒：
+
+```
+· 只写 +0x295 不写 +0x294 → 行永远不被选中，什么都不渲染
+· parity 必须异或翻转 → 引擎靠它的"变化"来刷新高亮状态
+  写死 0 或 1 会导致 glow 时而生效时而消失
+```
+
+### 120.2 我们的 build 为什么不能照抄偏移
+
+我们的偏移和帖子差 0x0B~0x0C：
+
+| 帖子 | 我们实测 | 差值 |
+|---|---|---|
+| `+0x295` contexts[0] | `+0x2A0` | +0x0B |
+| `+0x29D` focused | `+0x2A8` | +0x0B |
+| `+0x2A8` parity | `+0x2B4` | +0x0C |
+| `+0x294` selector | **未知** | — |
+
+按同样的移位推测，我们的 selector 应该在 `+0x29F`；
+但我们的 `+0x2A0`（被当作 contexts[0]）过去确实让剪影出来了，
+说明 **`+0x2A0` 很可能本身就是 selector**。
+
+两种可能，必须实测确定。**在确定之前不能乱写**——
+我们文档记录过 `+0x294` 在这个 build 是 `m_playerLocalGravityBlendEndTime`，
+乱写会破坏别的字段。
+
+### 120.3 新增两个手段把不确定项定死
+
+**`glowfields 0x<entity>`**
+
+dump 实体 `0x280 ~ 0x2C7` 的原始字节，并逐个候选偏移解释：
+
+```
++0x294  byte=0x??(?)  dword=0x????????(?)  float=?
++0x295  ...
++0x29D  ...
++0x29F  ...
++0x2A0  ...
++0x2A8  ...
++0x2B4  ...
+```
+
+判定方法：**selector 通常是 `0xFF`（无效）或 0~127 的小整数**；
+parity 是会随时间变的值；focused 是位掩码（0/1/3/5…）。
+
+**`glowsel <十进制偏移>`**
+
+运行时切换"写哪个偏移当 selector"，不用重编译。
+配合 `glowfields` 的结果，先读、再判断、再切。
+
+### 120.4 实体写序列已改为四步（可配置偏移）
+
+```c
+g_selOff   = 0x2A0;   /* selector，glowsel 可改 */
+g_ctxOff   = 0x2A1;   /* contexts[0] */
+g_focusOff = 0x2A8;
+g_fadeOff  = 0x2AC;
+g_parOff   = 0x2B4;
+...
+MemWrite(proc, e + g_selOff,   &row, 1);
+MemWrite(proc, e + g_ctxOff,   &row, 1);
+MemWrite(proc, e + g_focusOff, &one, 4);
+MemWrite(proc, e + g_fadeOff,  &fd,  4);
+/* parity 仅在首次见到该实体时异或 */
+```
+
+### 120.5 样式行运行时校验（用户指出的第二点）
+
+帖子提醒：**空闲行不是永久空闲**，切图 / 回合重置时引擎可能回收复用。
+
+`AutoGlowAll` 每 8 个 tick（约 2 秒）读回 dst 行：
+
+```c
+if (+0x2C 的 Flags != 期望值 || +0x30 的 DrawFunc != 期望值) {
+    GlowSetupRow(...);                       /* 重新整行写入 */
+    KF("[mdump] glowrow reclaimed, re-applied");
+}
+```
+
+校验的是 `Flags` 和 `DrawFunc` 两个最容易被引擎改写的字段
+（它们决定"画不画"，颜色被改只是变色，不影响存在）。
+
+### 120.6 当前偏移配置的两种情形
+
+```
+情形 A：selector = 0x2A0（默认）
+        过去 +0x2A0 写 row 就出剪影 → 支持这个假设
+        新代码 selector 0x2A0 + contexts[0] 0x2A1 → 应该继续工作
+
+情形 B：selector = 0x29F，contexts[0] = 0x2A0
+        那么旧代码一直写的是 contexts[0]，剪影能出说明引擎也认 contexts
+        新代码会先写 0x29F(selector) 再写 0x2A1(错位)
+        → glowfields 一看就知道，用 glowsel 0x29F 切过去
+```
+
+### 120.7 待验证
+
+```
+[ ] 重启加载新驱动（50176 字节，2026-11-27 15:12:41）
+[ ] glowfields 0x<dummy实体> → 看 0x294~0x2B8 原始字节
+[ ] 判断哪个偏移是 selector（0xFF 或小整数）
+[ ] 必要时 glowsel 切换
+[ ] 确认后进对局看远处/墙后高亮
+```

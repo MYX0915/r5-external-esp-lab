@@ -405,6 +405,13 @@ static ULONG g_autoGlow  = 1;    /* ???? */
 #define GLOW_DEFAULT_FLAGS  (GLOW_FLAG_TEAM_AGNOSTIC | GLOW_FLAG_DISABLE_DEATH_FADE)
 #define GLOW_DEFAULT_VIS    GLOW_VIS_ALWAYS
 static ULONG g_autoFlags = GLOW_DEFAULT_FLAGS;
+/* 实体侧 selector 偏移：不同 build 可能不同，运行时用 glowsel 切换
+ * 依据 UC 帖子：渲染器读 selector；只写 contexts[0] 不写 selector 永远不渲染 */
+static ULONG g_selOff  = 0x2A0;
+static ULONG g_ctxOff  = 0x2A1;   /* contexts[0]，selector 后面一个字节 */
+static ULONG g_focusOff= 0x2A8;
+static ULONG g_parOff  = 0x2B4;
+static ULONG g_fadeOff = 0x2AC;
 static ULONG g_autoVis   = GLOW_DEFAULT_VIS;
 static ULONG g_autoRow   = 50;   /* ?????????postProcess=1? */
 static U64   g_glowCache[64];
@@ -613,6 +620,7 @@ static VOID GlowParity(PEPROCESS proc);
 static VOID GlowColorRow(PEPROCESS proc, U64 globalVa, ULONG row, float r, float g, float b);
 static BOOLEAN PrefixIs(const UCHAR* p, const UCHAR* end, const char* tag);
 static float FabsF(float v);
+static VOID GlowFields(PEPROCESS proc, U64 ent);
 static VOID BoneScan(PEPROCESS proc, U64 ent);
 static VOID BoneDump(PEPROCESS proc, U64 base, ULONG stride, ULONG idx);
 static BOOLEAN BoneChainSig(PEPROCESS proc, U64 base, ULONG stride, float* headOut, float* originOut);
@@ -1015,6 +1023,27 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
                                 if (sd != 0x30 && sd != 0x40) sd = 0x30;
                                 BoneDump(proc, bv, sd, ix);
                             } else K("[mdump] bonedump: usage bonedump 0x<addr> [stride] [idx]\n");
+                        }
+
+                        else if (PrefixIs(p, le, "glowfields")) {
+                            const UCHAR* qg = p + 10;
+                            U64 ev = 0; BOOLEAN got = FALSE;
+                            while (qg < le && *qg == ' ') qg++;
+                            if (qg + 1 < le && qg[0] == '0' && (qg[1] == 'x' || qg[1] == 'X')) qg += 2;
+                            while (qg < le) { UCHAR c = *qg; U64 d;
+                                if (c >= '0' && c <= '9') d = c - '0';
+                                else if ((c|0x20) >= 'a' && (c|0x20) <= 'f') d = (c|0x20) - 'a' + 10;
+                                else break; ev = ev * 16 + d; qg++; got = TRUE; }
+                            if (got) GlowFields(proc, ev);
+                            else K("[mdump] glowfields: usage glowfields 0x<entity>\n");
+                        }
+                        else if (PrefixIs(p, le, "glowsel")) {
+                            const UCHAR* qg = p + 7;
+                            ULONG v = 0;
+                            if (ParseUOpt(&qg, le, &v) && v < 0x400) {
+                                g_selOff = v;
+                                KF("[mdump] glowsel=0x%X ctx=0x%X\n", g_selOff, g_ctxOff);
+                            } else K("[mdump] glowsel: usage glowsel <hexoffset>\n");
                         }
                         else if (PrefixIs(p, le, "glowfind")) {
                             GlowFindFree(proc, modBaseForNpc + RVA_HIGHLIGHT_GLOBAL);
@@ -1975,6 +2004,59 @@ static VOID BoneDump(PEPROCESS proc, U64 base, ULONG stride, ULONG idx)
     ExFreePoolWithTag(txt, 'bdmp');
 }
 
+
+/* dump 实体 0x280~0x2C4，帮助定位 selector / contexts / focused / parity */
+static VOID GlowFields(PEPROCESS proc, U64 ent)
+{
+    UCHAR buf[0x48];
+    CHAR* txt;
+    CHAR* w;
+    ULONG i;
+
+    txt = ExAllocatePool2(POOL_FLAG_NON_PAGED, 0x4000, 'gfld');
+    if (!txt) return;
+    RtlZeroMemory(txt, 0x4000); w = txt; w[0] = 0;
+
+    w = AppendFmt(w, txt + 0x4000, "glowfields ent=0x%llX  [0x280..0x2C7]\n", ent);
+    if (!NT_SUCCESS(MemRead(proc, ent + 0x280, buf, sizeof(buf)))) {
+        w = AppendFmt(w, txt + 0x4000, "read fail\n");
+        WriteFileAt(L"\\??\\C:\\ProgramData\\sc_glowfields.txt", txt, (ULONG)(w - txt) + 1);
+        ExFreePoolWithTag(txt, 'gfld');
+        return;
+    }
+    for (i = 0; i < sizeof(buf); i += 16) {
+        w = AppendFmt(w, txt + 0x4000, "  +0x%03X  %02X %02X %02X %02X  %02X %02X %02X %02X  %02X %02X %02X %02X  %02X %02X %02X %02X\n",
+            (unsigned)(0x280 + i),
+            buf[i+0], buf[i+1], buf[i+2], buf[i+3], buf[i+4], buf[i+5], buf[i+6], buf[i+7],
+            buf[i+8], buf[i+9], buf[i+10], buf[i+11], buf[i+12], buf[i+13], buf[i+14], buf[i+15]);
+    }
+    /* 逐候选解释 */
+    {
+        ULONG cand[10] = { 0x294, 0x295, 0x29D, 0x29F, 0x2A0, 0x2A1, 0x2A8, 0x2AC, 0x2B4, 0x2B8 };
+        for (i = 0; i < 10; i++) {
+            ULONG off = cand[i];
+            if (off - 0x280 + 4 > sizeof(buf)) continue;
+            {
+                ULONG d; float f;
+                UCHAR by = buf[off - 0x280];
+                RtlCopyMemory(&d, buf + (off - 0x280), 4);
+                RtlCopyMemory(&f, buf + (off - 0x280), 4);
+                w = AppendFmt(w, txt + 0x4000,
+                    "  +0x%03X  byte=0x%02X(%3u)  dword=0x%08X(%u)  float=%.4f\n",
+                    off, by, (unsigned)by, d, d, f);
+            }
+        }
+        w = AppendFmt(w, txt + 0x4000,
+            "\n当前驱动使用: sel=0x%X ctx=0x%X focus=0x%X fade=0x%X parity=0x%X\n",
+            g_selOff, g_ctxOff, g_focusOff, g_fadeOff, g_parOff);
+        w = AppendFmt(w, txt + 0x4000,
+            "判定: selector 通常是 0xFF(无效) 或 0..127 的小整数\n");
+    }
+    WriteFileAt(L"\\??\\C:\\ProgramData\\sc_glowfields.txt", txt, (ULONG)(w - txt) + 1);
+    K("[mdump] glowfields written\n");
+    ExFreePoolWithTag(txt, 'gfld');
+}
+
 static VOID AutoGlowAll(PEPROCESS proc)
 {
     UCHAR row = (UCHAR)(g_autoRow & 0xFF);
@@ -1987,9 +2069,29 @@ static VOID AutoGlowAll(PEPROCESS proc)
 
     /* ??????????/??????????? 240ms ???? */
     if (modBaseForNpc) {
-        /* 整行写：颜色 + 清掉距离/视线/队伍限制（原来是只写 RGB） */
-        GlowSetupRow(proc, modBaseForNpc + RVA_HIGHLIGHT_GLOBAL, g_autoRow,
-                     g_autoR, g_autoG, g_autoB, g_autoFlags, g_autoVis);
+        U64 gva = modBaseForNpc + RVA_HIGHLIGHT_GLOBAL;
+        /* 整行写：颜色 + 清掉距离/视线/队伍限制 */
+        GlowSetupRow(proc, gva, g_autoRow, g_autoR, g_autoG, g_autoB, g_autoFlags, g_autoVis);
+        /* —— 样式行运行时校验 ——
+         * 引擎在换图/回合重置时可能回收复用这一行，被改写就重新设置 */
+        {
+            static ULONG chk = 0;
+            if ((++chk % 8) == 0) {
+                U64 e = 0;
+                if (GlowRowAddr(proc, gva, g_autoRow, &e)) {
+                    ULONG fl = 0, vis = 0xFFFFFFFF;
+                    BOOLEAN bad = FALSE;
+                    if (!NT_SUCCESS(MemRead(proc, e + 0x2C, &fl, 4))) bad = TRUE;
+                    else if (fl != g_autoFlags) bad = TRUE;
+                    if (!NT_SUCCESS(MemRead(proc, e + 0x30, &vis, 4))) bad = TRUE;
+                    else if (vis != g_autoVis) bad = TRUE;
+                    if (bad) {
+                        GlowSetupRow(proc, gva, g_autoRow, g_autoR, g_autoG, g_autoB, g_autoFlags, g_autoVis);
+                        KF("[mdump] glowrow reclaimed, re-applied (flags=0x%X vis=%lu)\n", fl, vis);
+                    }
+                }
+            }
+        }
     }
 
     for (i = 0; i < g_entAddrCount && newN < 64; i++) {
@@ -1999,9 +2101,11 @@ static VOID AutoGlowAll(PEPROCESS proc)
         for (j = 0; j < g_glowCacheN; j++) {
             if (g_glowCache[j] == e) { seen = TRUE; break; }
         }
-        MemWrite(proc, e + 0x2A0, &row, 1);
-        MemWrite(proc, e + 0x2A8, &one, 4);
-        MemWrite(proc, e + 0x2AC, &fd, 4);
+        /* 四步（按 UC 帖子）：selector 是渲染器真正读的那个，必须先写 */
+        MemWrite(proc, e + g_selOff, &row, 1);
+        MemWrite(proc, e + g_ctxOff, &row, 1);
+        MemWrite(proc, e + g_focusOff, &one, 4);
+        MemWrite(proc, e + g_fadeOff, &fd, 4);
         if (!seen) {
             ULONG pv = 0;
             if (NT_SUCCESS(MemRead(proc, e + 0x2B4, &pv, 4))) {
