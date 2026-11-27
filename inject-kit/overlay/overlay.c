@@ -1,10 +1,12 @@
 // overlay.c -- external overlay: reads sc_feed.bin, projects world points, draws
+// 渲染后端：DirectComposition + D3D11 + D2D（替代原来的 GDI + 颜色键透明）
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdio.h>
 #include <math.h>
 
-#define KEYCOLOR RGB(255, 0, 255)
+#include "dc_render.h"
+
 #define FEED_PATH L"C:\\ProgramData\\sc_feed.bin"
 
 #define FEED_MAX_ENT 24
@@ -32,10 +34,13 @@ typedef struct _FEED {
     EINFO info[FEED_MAX_ENT];
 } FEED;
 
-static void DrawBars(HDC dc, int k, int x0, int y0, int bh, int wid);
+static void DrawBars(CV* cv, int k, int x0, int y0, int bh, int wid);
 static void SaveConfig(void);
+static int PickTarget(int w, int h);
+static void SkyNadeAssist(int w, int h);
 
 static HWND  g_overlay, g_game;
+static CV*   g_cv;
 static FEED  g_feed;
 static int   g_have;
 static FEED  g_last;
@@ -265,7 +270,7 @@ static NADE_SOL SolveNade(double bx, double by, double bz, const float* tp)
     return r;
 }
 
-static void DrawNadeTraj(HDC dc, int w, int h)
+static void DrawNadeTraj(CV* cv, int w, int h)
 {
     const double PI = 3.14159265358979;
     double bx = g_feed.cam[0], by = g_feed.cam[1], bz = g_feed.cam[2];
@@ -293,35 +298,25 @@ static void DrawNadeTraj(HDC dc, int w, int h)
         double t, dt = 0.02;
         float lastx = 0, lasty = 0;
         int have = 0;
-        HPEN pen = CreatePen(PS_SOLID, 2, RGB(255, 210, 60));
-        HPEN old = SelectObject(dc, pen);
-        SelectObject(dc, GetStockObject(NULL_BRUSH));
         for (t = 0; t <= g_nadeFuse + 1e-9; t += dt) {
             float pt[3], sx, sy;
             pt[0] = (float)(bx + vx * t);
             pt[1] = (float)(by + vy * t);
             pt[2] = (float)(bz + vz * t - 0.5 * g_nadeG * t * t);
             if (WorldToScreen(pt, w, h, &sx, &sy)) {
-                if (have) { MoveToEx(dc, (int)lastx, (int)lasty, NULL); LineTo(dc, (int)sx, (int)sy); }
+                if (have) CV_Line(cv, lastx, lasty, sx, sy, 1.0f, 0.82f, 0.24f, 2.0f);
                 lastx = sx; lasty = sy; have = 1;
             } else have = 0;
         }
-        SelectObject(dc, old);
-        DeleteObject(pen);
     }
 
-    /* ???? + ?? */
+    /* 目标点 + 准星 */
     {
         float sx, sy;
         if (WorldToScreen(g_feed.ent[best], w, h, &sx, &sy)) {
-            HPEN p2 = CreatePen(PS_SOLID, 2, RGB(255, 70, 70));
-            HPEN o2 = SelectObject(dc, p2);
-            SelectObject(dc, GetStockObject(NULL_BRUSH));
-            Ellipse(dc, (int)sx - 10, (int)sy - 10, (int)sx + 10, (int)sy + 10);
-            MoveToEx(dc, (int)sx - 16, (int)sy, NULL); LineTo(dc, (int)sx + 16, (int)sy);
-            MoveToEx(dc, (int)sx, (int)sy - 16, NULL); LineTo(dc, (int)sx, (int)sy + 16);
-            SelectObject(dc, o2);
-            DeleteObject(p2);
+            CV_Circle(cv, sx, sy, 10.0f, 1.0f, 0.27f, 0.27f, 2.0f);
+            CV_Line(cv, sx - 16, sy, sx + 16, sy, 1.0f, 0.27f, 0.27f, 2.0f);
+            CV_Line(cv, sx, sy - 16, sx, sy + 16, 1.0f, 0.27f, 0.27f, 2.0f);
 
             if (sol.ok) {
                 double now = g_feed.ang[0];
@@ -331,15 +326,19 @@ static void DrawNadeTraj(HDC dc, int w, int h)
                             "SkyNade D=%.0fm Vreq=%.0f Vnow=%.0f need=%.1f now=%.1f%s miss=%+.1fm(+?/-?)",
                             sol.D * 0.01905, sol.reqV, g_nadeV,
                             need, now, hint, sol.miss);
-                SetTextColor(dc, (sol.mode == 3) ? RGB(255, 120, 60) : ((fabs(now - need) < 3) ? RGB(80, 255, 80) : RGB(255, 210, 60)));
+                if (sol.mode == 3)
+                    CV_Text(cv, sx + 20, sy - 8, info, (int)strlen(info), 1.0f, 0.47f, 0.24f);
+                else if (fabs(now - need) < 3)
+                    CV_Text(cv, sx + 20, sy - 8, info, (int)strlen(info), 0.31f, 1.0f, 0.31f);
+                else
+                    CV_Text(cv, sx + 20, sy - 8, info, (int)strlen(info), 1.0f, 0.82f, 0.24f);
             } else {
                 _snprintf_s(info, sizeof(info), _TRUNCATE,
                             "SkyNade D=%.0fm  NO SOLUTION  Vreq=%.0f > Vnow=%.0f  (max %.0fm)",
                             sol.D * 0.01905, sol.reqV, g_nadeV,
                             sqrt(g_nadeV * g_nadeV - 0.25 * g_nadeG * g_nadeG * g_nadeFuse * g_nadeFuse) * g_nadeFuse * 0.01905);
-                SetTextColor(dc, RGB(255, 80, 80));
+                CV_Text(cv, sx + 20, sy - 8, info, (int)strlen(info), 1.0f, 0.31f, 0.31f);
             }
-            TextOutA(dc, (int)sx + 20, (int)sy - 8, info, (int)strlen(info));
         }
     }
 }
@@ -448,25 +447,19 @@ static void SkyNadeAssist(int w, int h)
     RecenterCursor();
 }
 
-static void Draw(HDC dc, int w, int h)
+static void Draw(CV* cv, int w, int h)
 {
     PollKeys();
     if (g_have && g_feed.ok) SkyNadeAssist(w, h);
-    HPEN pen = CreatePen(PS_SOLID, 2, RGB(0, 255, 0));
     char buf[160];
     float sx, sy, sx2, sy2;
     float feet[3], head[3];
-
-    SetBkMode(dc, TRANSPARENT);
-    SelectObject(dc, pen);
-    SelectObject(dc, GetStockObject(NULL_BRUSH));   /* outline only, no fill */
-    SetTextColor(dc, RGB(0, 255, 0));
 
     _snprintf_s(buf, sizeof(buf), _TRUNCATE,
                 "sc overlay %dx%d fps=%.0f feed=%s fov=%.1f offX=%.0f offY=%.0f  cam=(%.0f,%.0f,%.0f) ang=(%.1f,%.1f)",
                 w, h, g_fps, g_have ? "ok" : "none", g_fov, g_offX, g_offY,
                 g_feed.cam[0], g_feed.cam[1], g_feed.cam[2], g_feed.ang[0], g_feed.ang[1]);
-    TextOutA(dc, 8, 8, buf, (int)strlen(buf));
+    CV_Text(cv, 8, 8, buf, (int)strlen(buf), 0.0f, 1.0f, 0.0f);
 
     if (g_lastGood && (GetTickCount() - g_lastGood) < 1500) {
         /* ---- self box: independent, never blocks the entity loop ---- */
@@ -476,14 +469,12 @@ static void Draw(HDC dc, int w, int h)
             float bh = sy - sy2;
             float bw = bh * (float)g_boxW;
             if (bh > 4 && bh < 4000)
-                Rectangle(dc, (int)(sx - bw / 2), (int)sy2, (int)(sx + bw / 2), (int)sy);
+                CV_Rect(cv, sx - bw / 2, sy2, sx + bw / 2, sy, 0.0f, 1.0f, 0.0f, 2.0f);
         }
 
         /* ---- other entities: always drawn regardless of self projection ---- */
         {
-            HPEN ep = CreatePen(PS_SOLID, 2, RGB(255, 80, 80));
             unsigned k;
-            SelectObject(dc, ep);
             for (k = 0; k < g_feed.count && k < FEED_MAX_ENT; k++) {
                 float e[3], s1 = 0, s2 = 0, s3 = 0, s4 = 0;
                 float top[3];
@@ -499,24 +490,22 @@ static void Draw(HDC dc, int w, int h)
                         double dz = e[2] - g_feed.pos[2];
                         double meters = sqrt(dx*dx + dy*dy + dz*dz) * 0.01905;
                         if (wid < 6) wid = 6;
-                        Rectangle(dc, (int)(s1 - wid / 2), (int)s4, (int)(s1 + wid / 2), (int)s2);
+                        CV_Rect(cv, s1 - wid / 2, s4, s1 + wid / 2, s2, 1.0f, 0.31f, 0.31f, 2.0f);
                         _snprintf_s(buf, sizeof(buf), _TRUNCATE, "%.0fm", meters);
-                        TextOutA(dc, (int)(s1 - wid / 2), (int)s4 - 15, buf, (int)strlen(buf));
-                        DrawBars(dc, (int)k, (int)(s1 - wid / 2), (int)s4, (int)hgt, (int)wid);
+                        CV_Text(cv, s1 - wid / 2, s4 - 15, buf, (int)strlen(buf), 1.0f, 0.31f, 0.31f);
+                        DrawBars(cv, (int)k, (int)(s1 - wid / 2), (int)s4, (int)hgt, (int)wid);
                     }
                 }
             }
-            DeleteObject(ep);
         }
     }
-    DeleteObject(pen);
 
-    if (g_nadeOn) DrawNadeTraj(dc, w, h);
+    if (g_nadeOn) DrawNadeTraj(cv, w, h);
 }
 
 
-/* ?? / ??? / ?? */
-static void DrawBars(HDC dc, int k, int x0, int y0, int bh, int wid)
+/* HP / 护甲 / 名字 */
+static void DrawBars(CV* cv, int k, int x0, int y0, int bh, int wid)
 {
     const EINFO* inf;
     int bx;
@@ -527,34 +516,22 @@ static void DrawBars(HDC dc, int k, int x0, int y0, int bh, int wid)
 
     if (inf->hpMax > 0 && inf->hpMax < 10000) {
         double f = (double)inf->hp / (double)inf->hpMax;
-        RECT r;
-        HBRUSH bg, hb;
         if (f > 1.0) f = 1.0; if (f < 0.0) f = 0.0;
-        bg = CreateSolidBrush(RGB(25, 25, 25));
-        r.left = bx; r.right = bx + 4; r.top = y0; r.bottom = y0 + bh;
-        FillRect(dc, &r, bg); DeleteObject(bg);
-        hb = CreateSolidBrush(RGB(70, 210, 70));
-        r.left = bx; r.right = bx + 4;
-        r.top = y0 + (int)(bh * (1.0 - f)); r.bottom = y0 + bh;
-        FillRect(dc, &r, hb); DeleteObject(hb);
+        CV_FillRect(cv, (float)bx, (float)y0, (float)(bx + 4), (float)(y0 + bh),
+                    0.10f, 0.10f, 0.10f);
+        CV_FillRect(cv, (float)bx, (float)(y0 + (int)(bh * (1.0 - f))), (float)(bx + 4),
+                    (float)(y0 + bh), 0.27f, 0.82f, 0.27f);
     }
     if (inf->shMax > 0 && inf->shMax < 10000) {
         double f = (double)inf->sh / (double)inf->shMax;
-        RECT r;
-        HBRUSH bg, sb;
         if (f > 1.0) f = 1.0; if (f < 0.0) f = 0.0;
-        bg = CreateSolidBrush(RGB(25, 25, 25));
-        r.left = bx + 5; r.right = bx + 9; r.top = y0; r.bottom = y0 + bh;
-        FillRect(dc, &r, bg); DeleteObject(bg);
-        sb = CreateSolidBrush(RGB(80, 160, 255));
-        r.left = bx + 5; r.right = bx + 9;
-        r.top = y0 + (int)(bh * (1.0 - f)); r.bottom = y0 + bh;
-        FillRect(dc, &r, sb); DeleteObject(sb);
+        CV_FillRect(cv, (float)(bx + 5), (float)y0, (float)(bx + 9), (float)(y0 + bh),
+                    0.10f, 0.10f, 0.10f);
+        CV_FillRect(cv, (float)(bx + 5), (float)(y0 + (int)(bh * (1.0 - f))), (float)(bx + 9),
+                    (float)(y0 + bh), 0.31f, 0.63f, 1.0f);
     }
-    if (inf->nameLen > 0 && inf->nameLen < 20) {
-        SetTextColor(dc, RGB(230, 230, 230));
-        TextOutA(dc, x0, y0 - 30, inf->name, inf->nameLen);
-    }
+    if (inf->nameLen > 0 && inf->nameLen < 20)
+        CV_Text(cv, (float)x0, (float)(y0 - 30), inf->name, inf->nameLen, 0.90f, 0.90f, 0.90f);
     (void)wid;
 }
 
@@ -613,37 +590,46 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     static DWORD last, frames;
     switch (msg) {
     case WM_PAINT: {
-        PAINTSTRUCT ps; RECT rc; HBRUSH key;
-        HDC dc = BeginPaint(hwnd, &ps);
-        HDC mem; HBITMAP bmp, oldBmp;
-        GetClientRect(hwnd, &rc);
-        mem = CreateCompatibleDC(dc);                       /* double buffer: no flicker */
-        bmp = CreateCompatibleBitmap(dc, rc.right, rc.bottom);
-        oldBmp = (HBITMAP)SelectObject(mem, bmp);
-        key = CreateSolidBrush(KEYCOLOR);
-        FillRect(mem, &rc, key);
-        DeleteObject(key);
-        Draw(mem, rc.right, rc.bottom);
-        BitBlt(dc, 0, 0, rc.right, rc.bottom, mem, 0, 0, SRCCOPY);
-        SelectObject(mem, oldBmp);
-        DeleteObject(bmp);
-        DeleteDC(mem);
+        /* DComp 自绘，无需 GDI 重绘；仅验证区域 */
+        PAINTSTRUCT ps;
+        BeginPaint(hwnd, &ps);
         EndPaint(hwnd, &ps);
         return 0;
     }
+    case WM_NCHITTEST:
+        return HTTRANSPARENT;              /* 鼠标穿透（配合 WS_EX_TRANSPARENT） */
     case WM_TIMER: {
-        RECT gr;
+        RECT gr, rc;
         DWORD now = GetTickCount();
+        int w, h;
+        static RECT lastGr;
         if (!IsWindow(g_game)) g_game = FindGameWindow();
-        if (g_game && GetWindowRect(g_game, &gr))
-            SetWindowPos(hwnd, HWND_TOPMOST, gr.left, gr.top, gr.right - gr.left, gr.bottom - gr.top,
-                         SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        if (g_game && GetWindowRect(g_game, &gr)) {
+            /* 只有矩形真的变了才动窗口：SetWindowPos 每帧调用会显著掉帧 */
+            if (gr.left != lastGr.left || gr.top != lastGr.top ||
+                gr.right != lastGr.right || gr.bottom != lastGr.bottom) {
+                lastGr = gr;
+                SetWindowPos(hwnd, HWND_TOPMOST, gr.left, gr.top,
+                             gr.right - gr.left, gr.bottom - gr.top,
+                             SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            }
+        }
         Reload();
         frames++;
         if (now - last >= 1000) { g_fps = frames; frames = 0; last = now; LoadConfig(); }
-        InvalidateRect(hwnd, NULL, FALSE);
+
+        GetClientRect(hwnd, &rc);
+        w = rc.right - rc.left;
+        h = rc.bottom - rc.top;
+        if (g_cv && w > 0 && h > 0 && CV_Begin(g_cv)) {
+            Draw(g_cv, w, h);
+            CV_End(g_cv);
+        }
         return 0;
     }
+    case WM_SIZE:
+        /* 尺寸变化由 CV_Begin 内部按需重建 swapchain */
+        return 0;
     case WM_DESTROY: PostQuitMessage(0); return 0;
     }
     return DefWindowProcW(hwnd, msg, wp, lp);
@@ -663,12 +649,26 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show)
     RegisterClassW(&wc);
     LoadConfig();
     g_overlay = CreateWindowExW(
-        WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+        WS_EX_NOREDIRECTIONBITMAP | WS_EX_TRANSPARENT | WS_EX_TOPMOST
+        | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
         L"scOverlay", L"sc overlay", WS_POPUP, 0, 0, 800, 600, NULL, NULL, inst, NULL);
     if (!g_overlay) return 1;
-    SetLayeredWindowAttributes(g_overlay, KEYCOLOR, 0, LWA_COLORKEY);
+    /* DirectComposition 后端：不再需要 SetLayeredWindowAttributes 颜色键 */
+    g_cv = CV_Create(g_overlay);
+    if (!g_cv) return 2;
+    {   const char* e = CV_Error(g_cv);
+        if (e) {
+            MessageBoxA(NULL, e, "DirectComposition 初始化失败", MB_ICONERROR);
+            CV_Destroy(g_cv);
+            return 3;
+        }
+    }
     ShowWindow(g_overlay, SW_SHOWNOACTIVATE);
-    SetTimer(g_overlay, 1, 16, NULL);
+    /* 定时器默认精度 ~15.6ms，会吃掉一半帧率 */
+    { typedef UINT (WINAPI *PTBP)(UINT); HMODULE w = GetModuleHandleA("winmm.dll");
+      if (w) { PTBP f2 = (PTBP)GetProcAddress(w, "timeBeginPeriod"); if (f2) f2(1); } }
+    SetTimer(g_overlay, 1, 15, NULL);
     while (GetMessageW(&msg, NULL, 0, 0) > 0) { TranslateMessage(&msg); DispatchMessageW(&msg); }
+    if (g_cv) CV_Destroy(g_cv);
     return 0;
 }
