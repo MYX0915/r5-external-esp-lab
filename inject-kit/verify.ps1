@@ -61,6 +61,25 @@ if ($insts.Count -eq 0) { Li "✗ 没找到假人，确认在训练场"; exit 1 
 $target = $insts[0]
 Li "测试对象: $target"
 
+# ---------------------------------------------------------------- 偏移诊断
+H1 "0.5 偏移诊断（locdump + possel）"
+Li "偏移表: localplayerHandle 0x3d3a8d0 / LocalPlayer 0x3eac668 / m_vecAbsOrigin 0x170"
+Li "驱动默认: 句柄 0x3D3DCD0 / 坐标 0x978 -> 0x7830 -> 0x376C"
+Send-Req "locdump`r`n" | Out-Null
+Start-Sleep -Seconds 1
+if (Test-Path C:\ProgramData\sc_loc.txt) {
+    Get-Content C:\ProgramData\sc_loc.txt | ForEach-Object { Li $_ }
+} else { Li "✗ 无输出" }
+
+Li ""
+Li "切换到 m_vecAbsOrigin 0x170 测试"
+Send-Req "possel 0x170`r`n" | Out-Null
+Start-Sleep -Milliseconds 500
+Send-Req "possel`r`n" | Out-Null
+Start-Sleep -Milliseconds 500
+Get-Content C:\ProgramData\kmaplog.txt | Select-String 'possel' | Select-Object -Last 2 | ForEach-Object { Li $_.Line }
+Li "（跑一会儿再看 possel 无参数输出的命中统计，posOff 命中数 >0 说明 0x170 有效）"
+
 # ---------------------------------------------------------------- 骨骼
 H1 "1. 骨骼（bonescan 签名搜索）"
 Li "依据 UC Wiki 索引表：0=delta 4=hip 7=spineC 11=neckB 12=head"
@@ -163,6 +182,11 @@ H1 "4. 人工判定（缺一不可）"
   □ bonescan 是否命中（hits > 0）
   □ 命中的 h= 是否在 60~80 单位
   □ 若 stride 0x30/0x40 都不命中 → 试 0x20 / 0x48 / 0x60
+
+  【偏移】
+  □ locdump 三个候选里哪个 ser_match=1 且有相机值
+  □ possel 0x170 后，posOff 命中数是否 > 0
+  □ 若 0x170 有效 → 可简化 ReadEntPos 三级回退
 
   【血量】
   □ 假人 m_iHealth 是否 = 100（基准正确性）

@@ -7461,3 +7461,126 @@ table  LocalPlayer(ptr)   rva=0x3EAC668   ptr=0x...
 mdump.sys  57856 字节  2026-11-27 16:39:48（需重启）
 新增命令    locdump / locsel
 ```
+
+
+---
+
+## 129. possel 实现完成 + 完整重启验证序列（2026-11-27 16:42）
+
+### 129.1 实现（默认行为完全不变）
+
+```c
+static ULONG g_posOff = 0;              /* 0 = 原有三级回退 */
+static ULONG g_posHit[2] = { 0, 0 };    /* [0]=posOff 命中 [1]=回退命中 */
+```
+
+```c
+static BOOLEAN ReadEntPos(PEPROCESS proc, U64 inst, float* out)
+{
+    static const ULONG kOff[3] = { 0x978, 0x7830, 0x376C };
+    if (g_posOff) {                          /* 候选优先 */
+        if (TryPosAt(proc, inst, g_posOff, out)) { g_posHit[0]++; return TRUE; }
+    }
+    for (i = 0; i < 3; i++) {                /* 原有回退链 */
+        if (TryPosAt(proc, inst, kOff[i], out)) { g_posHit[1]++; return TRUE; }
+    }
+    return FALSE;
+}
+```
+
+把单次读取抽成 `TryPosAt()`，逻辑与原实现完全一致（NaN / 范围 / 原点排除）。
+
+### 129.2 命令
+
+| 命令 | 行为 |
+|---|---|
+| `possel 0x170` | 设候选偏移，同时清零统计 |
+| `possel 0` | 关闭，恢复默认三级回退 |
+| `possel`（无参数） | 打印 `possel=0xXXX 命中: posOff=N 回退=M` |
+
+`locdump` 的输出里也会带上 possel 状态与统计。
+
+**命中统计是关键判据**：
+`posOff` 命中数 > 0 说明 0x170 真的读到了有效坐标；
+全是回退命中说明 0x170 没用。
+
+### 129.3 verify.ps1 已集成
+
+新增第 0.5 步：
+
+```
+locdump                 → 三个候选对比
+possel 0x170            → 切换候选
+possel                  → 打印配置
+（跑一会儿后再 possel 看命中统计）
+```
+
+判据清单也补了一条：
+
+```
+□ locdump 三个候选里哪个 ser_match=1 且有相机值
+□ possel 0x170 后，posOff 命中数是否 > 0
+□ 若 0x170 有效 → 可简化 ReadEntPos 三级回退
+```
+
+### 129.4 完整重启验证序列
+
+```
+① 重启
+② 启动.cmd
+③ 开 Apex 进训练场（必须有可见假人，PVS 未加载的实体没有坐标）
+④ .\verify.ps1
+```
+
+脚本内部顺序：
+
+```
+[0]   前置检查（驱动 / 游戏 / esp loop start / 假人枚举）
+[0.5] 偏移诊断
+        locdump  → 三个本地玩家候选
+        possel 0x170 → 切换坐标候选
+[1]   骨骼   bonescan
+[1.5] 血量   hptest
+[2]   高亮   glowfields / glowdump 50 / glowfind
+[3]   配置   clone 50 → glowrow 纯蓝 → glowteam → 单实体四步
+[4]   人工判定清单
+```
+
+### 129.5 分支处理
+
+**若 0x170 有效（posOff 命中 > 0）**
+
+```
+⇒ m_vecAbsOrigin 是正统坐标字段
+⇒ 可简化 ReadEntPos：去掉 0x7830 / 0x376C 这些"碰巧能用"的偏移
+⇒ 对局坐标问题（第 115/116 节的 PVS 困扰）可能一次性解决
+```
+
+**若 0x170 全是垃圾（posOff 命中 = 0，全走回退）**
+
+```
+⇒ 直接 possel 0，行为回到原状，不影响现有功能
+⇒ 保留三级回退继续用
+⇒ 说明表里的 0x170 对我们的实体不适用（或者需要有效 PVS 实体）
+```
+
+### 129.6 注意事项（用户强调）
+
+```
+0x170 只在【PVS 已加载、存活有效】的实体上才有意义
+务必在训练场对可见假人测试
+不要测远处未渲染的实体，否则会误判偏移失效
+```
+
+这与第 116 节的教训一致：PVS 外的实体坐标本来就是 0，
+拿它做判据会把"没加载"误判成"偏移错"。
+
+### 129.7 当前状态
+
+```
+驱动    mdump.sys  58880 字节  2026-11-27 16:42:11（需重启）
+命令    新增 possel；locdump 增加 possel 状态输出
+脚本    verify.ps1 已含 [0.5] 偏移诊断步骤，语法通过
+文档    129 节
+游戏    Apex 目录仍为空，下载中
+```

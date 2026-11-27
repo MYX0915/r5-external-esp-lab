@@ -397,6 +397,11 @@ static U64 modBaseForNpc = 0;
  * offsets 表给的是 localplayerHandle = 0x3d3a8d0
  * 用 locdump 对比后可用 locsel 切换 */
 static U64 g_localHandleRva = 0x3D3DCD0ULL;
+/* 实体坐标偏移：0 = 走原有三级回退（默认，行为不变）
+ * 非 0 = 先试该偏移，取不到再回退
+ * offsets 表给的是 m_vecAbsOrigin = 0x170（正统世界坐标字段） */
+static ULONG g_posOff = 0;
+static ULONG g_posHit[2] = { 0, 0 };   /* [0]=posOff 命中 [1]=回退命中 */
 static U64 g_vtExtra  = 0;  /* ??? 1??????? (RVA 0x30E9330) */
 static U64 g_vtExtra2 = 0;  /* ??? 2???????? (RVA 0x316930) */
 static ULONG g_vtManual = 0; /* vt2 ??????????? */
@@ -637,6 +642,7 @@ static VOID GlowParity(PEPROCESS proc);
 static VOID GlowColorRow(PEPROCESS proc, U64 globalVa, ULONG row, float r, float g, float b);
 static BOOLEAN PrefixIs(const UCHAR* p, const UCHAR* end, const char* tag);
 static float FabsF(float v);
+static BOOLEAN TryPosAt(PEPROCESS proc, U64 inst, ULONG off, float* out);
 static VOID LocDump(PEPROCESS proc, U64 modBase);
 static VOID HpTest(PEPROCESS proc, U64 ent);
 static VOID XrefScan(PEPROCESS proc, U64 base, ULONG size, U64 value);
@@ -1049,6 +1055,26 @@ static VOID ServeRequests(PEPROCESS proc, U64* modData, ULONG* modSz, ULONG modN
 
 
 
+
+                        else if (PrefixIs(p, le, "possel")) {
+                            const UCHAR* qp = p + 6;
+                            ULONG v = 0;
+                            if (ParseUOpt(&qp, le, &v)) {
+                                if (v == 0) {
+                                    g_posOff = 0;
+                                    K("[mdump] possel=0 (恢复默认三级回退)\n");
+                                } else if (v < 0x4000) {
+                                    g_posOff = v;
+                                    g_posHit[0] = 0; g_posHit[1] = 0;
+                                    KF("[mdump] possel=0x%X (优先候选，失败回退)\n", v);
+                                } else {
+                                    K("[mdump] possel: 偏移超出范围 (需 < 0x4000)\n");
+                                }
+                            } else {
+                                KF("[mdump] possel=0x%X  命中: posOff=%lu 回退=%lu\n",
+                                   g_posOff, g_posHit[0], g_posHit[1]);
+                            }
+                        }
                         else if (PrefixIs(p, le, "locdump")) {
                             LocDump(proc, modBaseForNpc);
                         }
@@ -1644,20 +1670,37 @@ static VOID NearestSort(U64* addr, float* dist, ULONG n, ULONG keep)
  *   ??????        : +0x7830
  *   ????            : +0x376C
  * ????????????? */
+/* 单个偏移尝试：读 12 字节 vec3 并做合理性校验 */
+static BOOLEAN TryPosAt(PEPROCESS proc, U64 inst, ULONG off, float* out)
+{
+    float t[3];
+    if (!NT_SUCCESS(MemRead(proc, inst + off, t, 12))) return FALSE;
+    if (t[0] != t[0] || t[1] != t[1] || t[2] != t[2]) return FALSE;
+    if (t[0] < -60000.0f || t[0] > 60000.0f) return FALSE;
+    if (t[1] < -60000.0f || t[1] > 60000.0f) return FALSE;
+    if (t[2] < -60000.0f || t[2] > 60000.0f) return FALSE;
+    if (t[0] > -1.0f && t[0] < 1.0f && t[1] > -1.0f && t[1] < 1.0f) return FALSE;
+    out[0] = t[0]; out[1] = t[1]; out[2] = t[2];
+    return TRUE;
+}
+
 static BOOLEAN ReadEntPos(PEPROCESS proc, U64 inst, float* out)
 {
     static const ULONG kOff[3] = { 0x978, 0x7830, 0x376C };
     ULONG i;
+
+    /* possel candidate first, fall back to default chain */
+    if (g_posOff) {
+        if (TryPosAt(proc, inst, g_posOff, out)) {
+            if (g_posHit[0] < 0xFFFFFFFFu) g_posHit[0]++;
+            return TRUE;
+        }
+    }
     for (i = 0; i < 3; i++) {
-        float t[3];
-        if (!NT_SUCCESS(MemRead(proc, inst + kOff[i], t, 12))) continue;
-        if (t[0] != t[0] || t[1] != t[1] || t[2] != t[2]) continue;
-        if (t[0] < -60000.0f || t[0] > 60000.0f) continue;
-        if (t[1] < -60000.0f || t[1] > 60000.0f) continue;
-        if (t[2] < -60000.0f || t[2] > 60000.0f) continue;
-        if (t[0] > -1.0f && t[0] < 1.0f && t[1] > -1.0f && t[1] < 1.0f) continue;
-        out[0] = t[0]; out[1] = t[1]; out[2] = t[2];
-        return TRUE;
+        if (TryPosAt(proc, inst, kOff[i], out)) {
+            if (g_posHit[1] < 0xFFFFFFFFu) g_posHit[1]++;
+            return TRUE;
+        }
     }
     return FALSE;
 }
@@ -2336,6 +2379,8 @@ static VOID LocDump(PEPROCESS proc, U64 modBase)
     if (!txt) return;
     RtlZeroMemory(txt, 0x4000); w = txt; w[0] = 0;
     w = AppendFmt(w, txt + 0x4000, "locdump module=0x%llX\n", modBase);
+    w = AppendFmt(w, txt + 0x4000, "  possel=0x%X 命中 posOff=%lu 回退=%lu\n",
+                  g_posOff, g_posHit[0], g_posHit[1]);
 
     for (i = 0; i < n; i++) {
         if (c[i].isHandle) {
